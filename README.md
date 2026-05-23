@@ -49,6 +49,10 @@ not causal. Causal ablation and post-RoPE Q capture are planned follow-ups.
 - [Base vs instruction-tuned SUBJ scan](docs/research_notes/base_vs_instruct_subj.md):
   Mistral appears stable, Llama 3 migrates deeper, and Gemma 2 2B flattens or
   diffuses its single-head Q-space stance axis after instruction tuning.
+- [SST-2 pool-last-k sweep](docs/research_notes/sst2_pool_last_k_sweep.md):
+  sentiment polarity is weaker than SUBJ subjectivity/objectivity in single-head
+  Q-space, but the signal does not disappear when pooling over the last `1,3,5`
+  tokens.
 
 ## What Is Being Measured?
 
@@ -371,11 +375,11 @@ head_rsa_heatmap_layer_L.png
 
 ## Near-Term Research Directions
 
-- repeat the Mistral/Llama/Gemma scan on SST-2 and larger SUBJ samples;
+- repeat the Mistral/Llama/Gemma scan on larger SUBJ/SST-2 samples;
 - test whether Gemma's weaker single-head signal becomes stronger in 9B or
   appears as a multi-head / multi-layer distributed code;
 - compare base vs instruction-tuned checkpoints;
-- run SST-2 and SUBJ with `pool_last_k` sweeps;
+- run base-vs-instruct SST-2 with `pool_last_k` sweeps;
 - inspect whether strong heads are redundant via RSA/CKA;
 - implement post-RoPE Q capture as an option;
 - add causal ablation of candidate heads and measure downstream degradation.
