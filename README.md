@@ -141,6 +141,46 @@ may express the signal more weakly or more diffusely.
 
 The raw summary files are in `examples/subj_3models/`.
 
+## Head Similarity: Specialization vs Redundancy
+
+The next diagnostic asks whether the best stance-separating heads are isolated
+axes, semi-specialized clusters, or mostly redundant with the rest of the layer.
+For each model's best layer, the probe computes pairwise linear CKA and RSA
+correlation over head-level Q-space geometry.
+
+| model | best head | mean off-diagonal CKA | mean off-diagonal RSA | nearest heads by CKA |
+| --- | ---: | ---: | ---: | --- |
+| Mistral-7B-Instruct | L11/H22 | 0.577 | 0.638 | H19, H23, H20 |
+| Llama-3-8B-Instruct | L20/H31 | 0.655 | 0.772 | H30, H20, H23 |
+| Gemma-2-2B-it | L12/H1 | 0.804 | 0.877 | H3, H0, H5 |
+
+Interpretation:
+
+- **Mistral** looks like an early/mid semi-specialized stance cluster: H22 is
+  not isolated, but the layer still has enough head diversity for a few heads
+  to form a clear subjectivity/objectivity axis.
+- **Llama 3** looks like a later semi-specialized stance cluster: the best head
+  appears in a more redundant late-layer neighborhood, but still separates SUBJ
+  about as strongly as Mistral.
+- **Gemma 2 2B** has weak single-head Q-space geometry and high head
+  redundancy. The signal is not absent, but it appears less localized to a
+  distinct head and is more plausibly distributed across similar heads.
+
+Representative head-similarity pair tables are included in
+`examples/subj_3models/`.
+
+Llama 3 best-layer CKA/RSA:
+
+![Llama 3 head CKA heatmap](assets/llama3_head_cka_heatmap_layer_20.png)
+
+![Llama 3 head RSA heatmap](assets/llama3_head_rsa_heatmap_layer_20.png)
+
+Gemma 2 2B best-layer CKA/RSA:
+
+![Gemma 2 2B head CKA heatmap](assets/gemma2_2b_head_cka_heatmap_layer_12.png)
+
+![Gemma 2 2B head RSA heatmap](assets/gemma2_2b_head_rsa_heatmap_layer_12.png)
+
 ### Mistral vs Llama vs Gemma Heatmaps
 
 Mistral:
