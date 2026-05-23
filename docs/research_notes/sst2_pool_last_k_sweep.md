@@ -119,7 +119,7 @@ activations, or logits.
 ## Next Checks
 
 - Run the same SST-2 sweep on base checkpoints.
-- Add prompted SST-2 variants such as `Review: ... Sentiment:`.
+- Compare prompted SST-2 variants such as `Review: ... Sentiment:`.
 - Increase permutation count beyond 100 for the weaker SST-2 effects.
 - Compare pre-RoPE and post-RoPE Q capture.
 - Revisit SST-2 on larger or dense Gemma checkpoints.

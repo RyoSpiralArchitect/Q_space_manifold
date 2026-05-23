@@ -53,6 +53,9 @@ not causal. Causal ablation and post-RoPE Q capture are planned follow-ups.
   sentiment polarity is weaker than SUBJ subjectivity/objectivity in single-head
   Q-space, but the signal does not disappear when pooling over the last `1,3,5`
   tokens.
+- [SST-2 base-vs-instruct and prompt framing](docs/research_notes/sst2_base_vs_prompted.md):
+  naked SST-2 stays weak, but `Review: {text}\nSentiment:` strongly lights up
+  late sentiment-query heads in Mistral and Llama 3.
 
 ## What Is Being Measured?
 
@@ -343,6 +346,23 @@ pool_last_k_sweep_summary.csv
 pool_last_k_sweep_manifest.json
 ```
 
+To test a task framing rather than the naked sentence, use `--text-template`:
+
+```bash
+python q_space_manifold_monolith.py \
+  --backend mlx \
+  --model-path mlx-community/Mistral-7B-Instruct-v0.3-4bit \
+  --dataset-source sst2 \
+  --samples-per-class 100 \
+  --text-template $'Review: {text}\nSentiment:' \
+  --pool-last-k-sweep 1,3,5 \
+  --projection pca \
+  --detail-best-layer-head \
+  --head-similarity \
+  --no-plots \
+  --output-dir /tmp/q_space_prompted_sst2
+```
+
 ## Outputs
 
 Each run writes:
@@ -379,7 +399,7 @@ head_rsa_heatmap_layer_L.png
 - test whether Gemma's weaker single-head signal becomes stronger in 9B or
   appears as a multi-head / multi-layer distributed code;
 - compare base vs instruction-tuned checkpoints;
-- run base-vs-instruct SST-2 with `pool_last_k` sweeps;
+- run prompted SST-2 on base checkpoints;
 - inspect whether strong heads are redundant via RSA/CKA;
 - implement post-RoPE Q capture as an option;
 - add causal ablation of candidate heads and measure downstream degradation.

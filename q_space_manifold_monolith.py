@@ -185,6 +185,38 @@ def rows_to_text_dataset(
     return TextDataset(texts=raw_texts, labels=labels, class_names=class_names, metadata=dataset_metadata)
 
 
+def apply_text_template(dataset: TextDataset, template: str) -> TextDataset:
+    if not template:
+        return dataset
+    rendered_texts = []
+    for index, (text, label) in enumerate(zip(dataset.texts, dataset.labels)):
+        class_name = dataset.class_names[label]
+        try:
+            rendered = template.format(
+                text=text,
+                label=label,
+                class_name=class_name,
+                index=index,
+            )
+        except KeyError as exc:
+            raise SystemExit(
+                f"--text-template unknown field {exc.args[0]!r}; "
+                "available fields are {text}, {label}, {class_name}, and {index}"
+            ) from exc
+        if not rendered.strip():
+            raise SystemExit(f"--text-template produced empty text for sample {index}")
+        rendered_texts.append(rendered)
+    metadata = dict(dataset.metadata)
+    metadata["text_template"] = template
+    metadata["text_template_fields"] = ["text", "label", "class_name", "index"]
+    return TextDataset(
+        texts=rendered_texts,
+        labels=list(dataset.labels),
+        class_names=list(dataset.class_names),
+        metadata=metadata,
+    )
+
+
 def balanced_or_limited_rows(
     rows: Sequence[dict[str, Any]],
     *,
@@ -2859,6 +2891,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--text-column", default="")
     parser.add_argument("--label-column", default="")
     parser.add_argument(
+        "--text-template",
+        default="",
+        help=(
+            "Optional format template applied to each sample after loading, e.g. "
+            "'Review: {text}\\nSentiment:'. Available fields: {text}, {label}, {class_name}, {index}."
+        ),
+    )
+    parser.add_argument(
         "--samples-per-class",
         type=int,
         default=0,
@@ -3018,6 +3058,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     dataset = load_dataset_from_args(args)
+    dataset = apply_text_template(dataset, args.text_template)
     if args.detail_text_index is not None and args.detail_text_index >= len(dataset.texts):
         raise SystemExit(f"--detail-text-index must be in [0, {len(dataset.texts) - 1}]")
     specs = load_model_run_specs(args)
