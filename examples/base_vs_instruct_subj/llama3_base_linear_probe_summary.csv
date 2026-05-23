@@ -1,0 +1,4 @@
+layer,head,reason,linear_probe_accuracy_loo,linear_probe_macro_accuracy_loo,null_accuracy_mean,null_accuracy_std,null_accuracy_max,p_ge_actual_accuracy,n_permutations,finite_null_count,linear_probe_alpha,confusion_json,class_accuracy_json
+11,4,target_layer_head,0.87,0.87,0.49595,0.04825295327749381,0.615,0.009900990099009901,100,100,1.0,"[[88, 12], [14, 86]]","{""0"": 0.88, ""1"": 0.86}"
+11,6,best_head_at_target_layer,0.93,0.9299999999999999,0.4979500000000001,0.04559109013831541,0.63,0.009900990099009901,100,100,1.0,"[[90, 10], [4, 96]]","{""0"": 0.9, ""1"": 0.96}"
+13,27,best_layer_head_overall,0.86,0.86,0.502,0.050492573711388496,0.63,0.009900990099009901,100,100,1.0,"[[82, 18], [10, 90]]","{""0"": 0.82, ""1"": 0.9}"

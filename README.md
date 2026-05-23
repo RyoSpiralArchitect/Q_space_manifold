@@ -44,6 +44,12 @@ concentrated in one head or distributed across weaker heads.
 This is still exploratory. The current evidence is geometric and predictive,
 not causal. Causal ablation and post-RoPE Q capture are planned follow-ups.
 
+## Research Notes
+
+- [Base vs instruction-tuned SUBJ scan](docs/research_notes/base_vs_instruct_subj.md):
+  Mistral appears stable, Llama 3 migrates deeper, and Gemma 2 2B flattens or
+  diffuses its single-head Q-space stance axis after instruction tuning.
+
 ## What Is Being Measured?
 
 For GPT-2-style models, the script captures the Q slice from fused QKV

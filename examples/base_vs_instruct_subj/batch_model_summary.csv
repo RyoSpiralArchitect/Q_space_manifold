@@ -1,0 +1,7 @@
+model_alias,backend,model_path,dataset_source,sample_count,n_layers,num_heads,head_dim,pool_last_k,target_layer,target_layer_relative_depth,target_head,best_head_at_target_layer,best_head_at_target_layer_score,best_layer,best_head,best_layer_relative_depth,best_layer_head_silhouette_cosine,output_dir
+mistral_base,mlx,mlx-community/Mistral-7B-v0.3-4bit,subj,200,32,32,128,1,11,0.3548387096774194,4,22,0.22074665351153222,10,6,0.3225806451612903,0.23073412766142704,/tmp/q_space_phase_scan_subj_base_vs_it/mistral_base
+mistral_it,mlx,mlx-community/Mistral-7B-Instruct-v0.3-4bit,subj,200,32,32,128,1,11,0.3548387096774194,4,22,0.22895616028371785,11,22,0.3548387096774194,0.22895616028371785,/tmp/q_space_phase_scan_subj_base_vs_it/mistral_it
+llama3_base,mlx,mlx-community/Meta-Llama-3-8B-4bit,subj,200,32,32,128,1,11,0.3548387096774194,4,6,0.17722183729864438,13,27,0.41935483870967744,0.18991996655865065,/tmp/q_space_phase_scan_subj_base_vs_it/llama3_base
+llama3_it,mlx,mlx-community/Meta-Llama-3-8B-Instruct-4bit,subj,200,32,32,128,1,11,0.3548387096774194,4,18,0.18711511752394347,20,31,0.6451612903225806,0.22761455732046346,/tmp/q_space_phase_scan_subj_base_vs_it/llama3_it
+gemma2_2b_base,mlx,mlx-community/gemma-2-2b-4bit,subj,200,26,8,256,1,9,0.36,4,6,0.1564468337589869,21,4,0.84,0.1815322885217372,/tmp/q_space_phase_scan_subj_base_vs_it/gemma2_2b_base
+gemma2_2b_it,mlx,mlx-community/gemma-2-2b-it-4bit,subj,200,26,8,256,1,9,0.36,4,6,0.023654356427884923,12,1,0.48,0.0410341950347603,/tmp/q_space_phase_scan_subj_base_vs_it/gemma2_2b_it
