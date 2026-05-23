@@ -1,0 +1,103 @@
+{
+  "created_at": "2026-05-23T15:58:30.378459+00:00",
+  "dataset": {
+    "dataset_source": "subj",
+    "hf_dataset_name": "SetFit/subj",
+    "hf_dataset_config": null,
+    "dataset_split": "train",
+    "text_column": "text",
+    "label_column": "label",
+    "samples_per_class": 100,
+    "max_samples": 0,
+    "dataset_seed": 42,
+    "sample_count": 200,
+    "class_counts": {
+      "subjective": 100,
+      "objective": 100
+    },
+    "raw_label_to_label": {
+      "0": 0,
+      "1": 1
+    }
+  },
+  "model_count": 3,
+  "models": [
+    {
+      "alias": "mistral_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+    },
+    {
+      "alias": "llama3_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/Meta-Llama-3-8B-Instruct-4bit"
+    },
+    {
+      "alias": "gemma2_2b_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/gemma-2-2b-it-4bit"
+    }
+  ],
+  "summary_rows": [
+    {
+      "model_alias": "mistral_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
+      "dataset_source": "subj",
+      "sample_count": 200,
+      "n_layers": 32,
+      "num_heads": 32,
+      "head_dim": 128,
+      "target_layer": 11,
+      "target_layer_relative_depth": 0.3548387096774194,
+      "target_head": 4,
+      "best_head_at_target_layer": 22,
+      "best_head_at_target_layer_score": 0.22895616028371785,
+      "best_layer": 11,
+      "best_head": 22,
+      "best_layer_relative_depth": 0.3548387096774194,
+      "best_layer_head_silhouette_cosine": 0.22895616028371785,
+      "output_dir": "/tmp/q_space_phase_scan_subj_3models/mistral_it"
+    },
+    {
+      "model_alias": "llama3_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/Meta-Llama-3-8B-Instruct-4bit",
+      "dataset_source": "subj",
+      "sample_count": 200,
+      "n_layers": 32,
+      "num_heads": 32,
+      "head_dim": 128,
+      "target_layer": 11,
+      "target_layer_relative_depth": 0.3548387096774194,
+      "target_head": 4,
+      "best_head_at_target_layer": 18,
+      "best_head_at_target_layer_score": 0.18711511752394347,
+      "best_layer": 20,
+      "best_head": 31,
+      "best_layer_relative_depth": 0.6451612903225806,
+      "best_layer_head_silhouette_cosine": 0.22761455732046346,
+      "output_dir": "/tmp/q_space_phase_scan_subj_3models/llama3_it"
+    },
+    {
+      "model_alias": "gemma2_2b_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/gemma-2-2b-it-4bit",
+      "dataset_source": "subj",
+      "sample_count": 200,
+      "n_layers": 26,
+      "num_heads": 8,
+      "head_dim": 256,
+      "target_layer": 9,
+      "target_layer_relative_depth": 0.36,
+      "target_head": 4,
+      "best_head_at_target_layer": 6,
+      "best_head_at_target_layer_score": 0.023654356427884923,
+      "best_layer": 12,
+      "best_head": 1,
+      "best_layer_relative_depth": 0.48,
+      "best_layer_head_silhouette_cosine": 0.0410341950347603,
+      "output_dir": "/tmp/q_space_phase_scan_subj_3models/gemma2_2b_it"
+    }
+  ]
+}

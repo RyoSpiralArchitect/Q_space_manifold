@@ -20,8 +20,10 @@ and head-to-head RSA/CKA.
 
 ## Current Hypothesis
 
-Early results suggest that middle transformer layers may contain a phase where
-question or discourse stance becomes sharply organized:
+Early results suggest that transformer layers may contain a **model-family
+dependent stance phase** where question or discourse stance becomes sharply
+organized. The phase is not necessarily located at the same relative depth in
+every architecture:
 
 - **stance formation**: subjective, objective, positive, negative, or factual
   framing becomes separable in Q-space;
@@ -31,8 +33,16 @@ question or discourse stance becomes sharply organized:
   and more like a structured path from initialization into local exploration and
   drift.
 
-This is still exploratory. The current evidence is correlational, not causal.
-Causal ablation and post-RoPE Q capture are planned follow-ups.
+The current working hypothesis is:
+
+```text
+instruction-tuned decoders can develop stance-separating Q-space heads,
+but the layer where that phase appears shifts by model family and may be
+concentrated in one head or distributed across weaker heads.
+```
+
+This is still exploratory. The current evidence is geometric and predictive,
+not causal. Causal ablation and post-RoPE Q capture are planned follow-ups.
 
 ## What Is Being Measured?
 
@@ -81,6 +91,71 @@ linear probe leave-one-out accuracy:
   best   L11/H22 = 0.86
 random-label p-value: 0.0099
 ```
+
+## First Cross-Model SUBJ Scan
+
+A first 3-model scan used the same `SetFit/subj` sample
+(`100 subjective + 100 objective`) and the same PCA / random-label /
+linear-probe settings across:
+
+- `mlx-community/Mistral-7B-Instruct-v0.3-4bit`
+- `mlx-community/Meta-Llama-3-8B-Instruct-4bit`
+- `mlx-community/gemma-2-2b-it-4bit`
+
+Best layer/head by high-dimensional cosine silhouette:
+
+| model | best layer/head | relative depth | silhouette |
+| --- | ---: | ---: | ---: |
+| Mistral-7B-Instruct | L11/H22 | 0.355 | 0.2290 |
+| Llama-3-8B-Instruct | L20/H31 | 0.645 | 0.2276 |
+| Gemma-2-2B-it | L12/H1 | 0.480 | 0.0410 |
+
+Interpretation:
+
+- **Mistral** shows a broad early/mid stance-separation band, with several
+  top heads between relative depth `0.23` and `0.58`.
+- **Llama 3** reaches a similar maximum silhouette, but its strongest head is
+  later, around relative depth `0.65`, with several secondary heads in the
+  mid-to-late range.
+- **Gemma 2 2B** is much weaker as a single-head Q-space separation signal:
+  its top 10 heads stay near `0.03-0.04`. However, linear probes still perform
+  above random-label controls, suggesting weak or distributed signal rather
+  than total absence.
+
+Linear probe leave-one-out accuracy for the best overall head:
+
+| model | best head | LOO accuracy | random-label mean |
+| --- | ---: | ---: | ---: |
+| Mistral-7B-Instruct | L11/H22 | 0.86 | 0.487 |
+| Llama-3-8B-Instruct | L20/H31 | 0.935 | 0.497 |
+| Gemma-2-2B-it | L12/H1 | 0.64 | 0.494 |
+
+This updates the hypothesis from "a generic middle-layer phase" to a more
+specific one:
+
+```text
+Mistral-like architectures may expose an earlier concentrated Q-space stance
+phase, Llama 3 may expose a later concentrated phase, and smaller Gemma models
+may express the signal more weakly or more diffusely.
+```
+
+The raw summary files are in `examples/subj_3models/`.
+
+### Mistral vs Llama vs Gemma Heatmaps
+
+Mistral:
+
+![Mistral layer/head heatmap](assets/layer_head_separability_heatmap.png)
+
+Llama 3:
+
+![Llama 3 layer/head heatmap](assets/llama3_it_layer_head_separability_heatmap.png)
+
+Gemma 2 2B:
+
+![Gemma 2 2B layer/head heatmap](assets/gemma2_2b_it_layer_head_separability_heatmap.png)
+
+## Representative Mistral Detail Plots
 
 ### Layer x Head Separability
 
@@ -250,7 +325,9 @@ head_rsa_heatmap_layer_L.png
 
 ## Near-Term Research Directions
 
-- compare Mistral, Llama, and Gemma at matched relative depths;
+- repeat the Mistral/Llama/Gemma scan on SST-2 and larger SUBJ samples;
+- test whether Gemma's weaker single-head signal becomes stronger in 9B or
+  appears as a multi-head / multi-layer distributed code;
 - compare base vs instruction-tuned checkpoints;
 - run SST-2 and SUBJ with `pool_last_k` sweeps;
 - inspect whether strong heads are redundant via RSA/CKA;
