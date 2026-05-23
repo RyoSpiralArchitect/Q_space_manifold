@@ -1,0 +1,3 @@
+layer,head,reason,projection,highd_silhouette_cosine,projected_silhouette_euclidean,knn_recall_highd_cosine_to_projected_euclidean,projection_knn_k,pca_explained_variance_1,pca_explained_variance_2,pca_explained_variance_2d_sum,highd_mean_centroid_pair_cosine_distance,highd_mean_within_class_cosine_distance
+11,4,target_layer_head,pca,0.08805239656915304,0.26982884565645177,0.127,5,0.0977911576628685,0.0782378762960434,0.1760290339589119,0.032208800315856934,0.23513026535511017
+11,22,best_head_at_target_layer,pca,0.22895616028371785,0.42644883920187227,0.14,5,0.18406355381011963,0.07993532717227936,0.263998880982399,0.09703636169433594,0.23431344330310822

@@ -1,0 +1,2 @@
+model_alias,backend,model_path,dataset_source,sample_count,n_layers,num_heads,head_dim,target_layer,target_layer_relative_depth,target_head,best_head_at_target_layer,best_head_at_target_layer_score,best_layer,best_head,best_layer_relative_depth,best_layer_head_silhouette_cosine,output_dir
+mistral_it,mlx,mlx-community/Mistral-7B-Instruct-v0.3-4bit,subj,200,32,32,128,11,0.3548387096774194,4,22,0.22895616028371785,11,22,0.3548387096774194,0.22895616028371785,/tmp/q_space_phase_scan_subj/mistral_it
