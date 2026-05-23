@@ -150,6 +150,31 @@ The strongest prompted effects are late and concentrated:
 - Gemma 2 2B-it remains weak and does not show a comparable prompt-induced
   stance head.
 
+## Representative Plots
+
+These plots were generated from the prompted `pool_last_k=1` run with
+`--projection pca`, `--detail-best-layer-head`, `--head-similarity`, and
+`--drop-special-tokens`.
+
+Mistral shows a late, localized stance-separating peak at L23/H30:
+
+![Mistral prompted SST-2 layer-head separability](../../assets/sst2_prompted_mistral_layer_head_heatmap.png)
+
+![Mistral prompted SST-2 token Q-flow at L23/H30](../../assets/sst2_prompted_mistral_query_flow_layer_23_head_30.png)
+
+Llama 3 shows an even stronger prompted peak around L20/H9, with a broader
+late-layer warm band:
+
+![Llama 3 prompted SST-2 layer-head separability](../../assets/sst2_prompted_llama3_layer_head_heatmap.png)
+
+![Llama 3 prompted SST-2 token Q-flow at L20/H9](../../assets/sst2_prompted_llama3_query_flow_layer_20_head_9.png)
+
+Gemma 2 2B-it remains a useful contrast case: its best prompted silhouette is
+much smaller, and the heatmap scale stays near zero compared with Mistral and
+Llama 3:
+
+![Gemma 2 2B-it prompted SST-2 layer-head separability](../../assets/sst2_prompted_gemma2_2b_layer_head_heatmap.png)
+
 ## Working Interpretation
 
 The prompt appears to create an explicit sentiment-query position. The final
