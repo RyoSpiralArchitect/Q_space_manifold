@@ -77,6 +77,24 @@ SPECIAL_TOKEN_STRINGS = {
     "[UNK]",
 }
 
+Q_STAGE_PRE_ROPE = "q_projection_output_pre_attention_position_rotation"
+Q_STAGE_POST_ROPE = "q_projection_output_post_attention_position_rotation"
+
+Q_CAPTURE_STAGE_ALIASES = {
+    "pre-rope": Q_STAGE_PRE_ROPE,
+    "pre_rope": Q_STAGE_PRE_ROPE,
+    "pre": Q_STAGE_PRE_ROPE,
+    "q-proj": Q_STAGE_PRE_ROPE,
+    "q_proj": Q_STAGE_PRE_ROPE,
+    Q_STAGE_PRE_ROPE: Q_STAGE_PRE_ROPE,
+    "post-rope": Q_STAGE_POST_ROPE,
+    "post_rope": Q_STAGE_POST_ROPE,
+    "post": Q_STAGE_POST_ROPE,
+    "post-rope-pre-score": Q_STAGE_POST_ROPE,
+    "post_rope_pre_score": Q_STAGE_POST_ROPE,
+    Q_STAGE_POST_ROPE: Q_STAGE_POST_ROPE,
+}
+
 
 @dataclass(frozen=True)
 class TextDataset:
@@ -452,6 +470,35 @@ def normalize_rows(rows: Any) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def normalize_q_capture_stage(stage: str) -> str:
+    normalized = str(stage or "pre-rope").strip().lower()
+    if normalized not in Q_CAPTURE_STAGE_ALIASES:
+        valid = ", ".join(sorted({key for key in Q_CAPTURE_STAGE_ALIASES if not key.startswith("q_projection_")}))
+        raise SystemExit(f"unknown --q-capture-stage {stage!r}; expected one of: {valid}")
+    return Q_CAPTURE_STAGE_ALIASES[normalized]
+
+
+def q_capture_position_note(stage: str, *, backend: str, projection_kind: str) -> str:
+    if stage == Q_STAGE_PRE_ROPE:
+        if backend == "torch":
+            return (
+                "For RoPE models this is pre-RoPE Q. For GPT-2-style absolute-position "
+                "models this is the Q projection after positional information has already "
+                "entered the residual stream, before attention scoring."
+            )
+        return (
+            "For RoPE models this is pre-RoPE Q captured at the q_proj/wq output, "
+            "before rotary position embedding is applied inside attention."
+        )
+    if stage == Q_STAGE_POST_ROPE:
+        return (
+            "For RoPE models this is the query tensor captured from the model's actual "
+            "RoPE call after rotary position embedding, before attention scaling/scoring. "
+            "The current implementation supports MLX full-sequence capture with cache offset 0."
+        )
+    return f"Q capture stage {stage!r} for backend={backend}, projection_kind={projection_kind}."
+
+
 def effective_linear_probe_permutation_n(args: argparse.Namespace) -> int:
     if args.linear_probe_permutation_n is None:
         return int(args.label_permutation_n)
@@ -651,6 +698,12 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
         from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
     except ImportError as exc:
         raise SystemExit("torch backend requires: pip install torch transformers") from exc
+    q_capture_stage = normalize_q_capture_stage(args.q_capture_stage)
+    if q_capture_stage == Q_STAGE_POST_ROPE:
+        raise SystemExit(
+            "--q-capture-stage post-rope is currently implemented for the MLX backend only. "
+            "Use --backend mlx for post-RoPE Q capture."
+        )
 
     if args.device == "auto":
         if torch.cuda.is_available():
@@ -735,11 +788,11 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
             "device": device,
             "projection_path": spec.path_template,
             "projection_kind": spec.kind,
-            "q_capture_stage": "q_projection_output_pre_attention_position_rotation",
-            "q_capture_position_note": (
-                "For RoPE models this is pre-RoPE Q. For GPT-2-style absolute-position "
-                "models this is the Q projection after positional information has already "
-                "entered the residual stream, before attention scoring."
+            "q_capture_stage": q_capture_stage,
+            "q_capture_position_note": q_capture_position_note(
+                q_capture_stage,
+                backend="torch",
+                projection_kind=spec.kind,
             ),
             "layers": n_layers,
             "heads": num_heads,
@@ -805,6 +858,17 @@ def find_mlx_q_projection(layer: Any) -> tuple[Any, str, str]:
     raise SystemExit("could not find an MLX Q projection such as self_attn.q_proj")
 
 
+def find_mlx_rope(layer: Any) -> tuple[Any, str, str]:
+    attention, attention_name = find_mlx_attention(layer)
+    for rope_name in ["rope", "rotary_emb", "rotary_embedding"]:
+        if hasattr(attention, rope_name):
+            return attention, rope_name, f"{attention_name}.{rope_name}"
+    raise SystemExit(
+        "could not find an MLX RoPE module such as self_attn.rope; "
+        "--q-capture-stage post-rope requires a RoPE-based attention module"
+    )
+
+
 class MlxQCaptureWrapper:
     def __init__(self, inner: Any, layer_idx: int, cache: dict[int, Any]) -> None:
         self._inner = inner
@@ -814,6 +878,24 @@ class MlxQCaptureWrapper:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         output = self._inner(*args, **kwargs)
         self._cache[self._layer_idx] = output
+        return output
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+class MlxRopeQCaptureWrapper:
+    def __init__(self, inner: Any, layer_idx: int, cache: dict[int, Any], expected_heads: int) -> None:
+        self._inner = inner
+        self._layer_idx = layer_idx
+        self._cache = cache
+        self._expected_heads = expected_heads
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        output = self._inner(*args, **kwargs)
+        shape = getattr(output, "shape", ())
+        if self._layer_idx not in self._cache and len(shape) == 4 and int(shape[1]) == self._expected_heads:
+            self._cache[self._layer_idx] = output
         return output
 
     def __getattr__(self, name: str) -> Any:
@@ -846,6 +928,7 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
         from mlx_lm import load  # type: ignore
     except ImportError as exc:
         raise SystemExit("mlx backend requires: pip install mlx mlx-lm") from exc
+    q_capture_stage = normalize_q_capture_stage(args.q_capture_stage)
 
     load_kwargs: dict[str, Any] = {}
     if args.trust_remote_code:
@@ -860,11 +943,22 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
     current_q_cache: dict[int, Any] = {}
     originals: list[tuple[Any, str, Any]] = []
     projection_path = ""
+    rope_path = ""
     for layer_idx, layer in enumerate(layers):
         parent, attr, projection_path = find_mlx_q_projection(layer)
-        original = getattr(parent, attr)
-        originals.append((parent, attr, original))
-        setattr(parent, attr, MlxQCaptureWrapper(original, layer_idx, current_q_cache))
+        if q_capture_stage == Q_STAGE_POST_ROPE:
+            rope_parent, rope_attr, rope_path = find_mlx_rope(layer)
+            original = getattr(rope_parent, rope_attr)
+            originals.append((rope_parent, rope_attr, original))
+            setattr(
+                rope_parent,
+                rope_attr,
+                MlxRopeQCaptureWrapper(original, layer_idx, current_q_cache, num_heads),
+            )
+        else:
+            original = getattr(parent, attr)
+            originals.append((parent, attr, original))
+            setattr(parent, attr, MlxQCaptureWrapper(original, layer_idx, current_q_cache))
 
     final_q_records: list[Any] = []
     token_q_records: list[Any] = []
@@ -885,14 +979,23 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
             for layer_idx in range(n_layers):
                 q_raw = current_q_cache[layer_idx]
                 mx.eval(q_raw)
-                q_np = np.array(q_raw).astype("float32")
-                if q_np.shape[-1] != num_heads * head_dim:
-                    raise RuntimeError(
-                        f"MLX layer {layer_idx} Q shape {q_np.shape} does not match "
-                        f"heads*head_dim={num_heads * head_dim}"
-                    )
-                q_np = q_np.reshape(q_np.shape[0], q_np.shape[1], num_heads, head_dim)
-                q_np = np.transpose(q_np, (0, 2, 1, 3))[0]
+                if q_capture_stage == Q_STAGE_POST_ROPE:
+                    if len(q_raw.shape) != 4 or q_raw.shape[1] != num_heads or q_raw.shape[-1] != head_dim:
+                        raise RuntimeError(
+                            f"MLX layer {layer_idx} post-RoPE Q shape {q_raw.shape} does not match "
+                            f"[batch, heads={num_heads}, seq, head_dim={head_dim}]"
+                        )
+                    q_np = np.array(q_raw).astype("float32")[0]
+                else:
+                    if q_raw.shape[-1] != num_heads * head_dim:
+                        raise RuntimeError(
+                            f"MLX layer {layer_idx} Q shape {q_raw.shape} does not match "
+                            f"heads*head_dim={num_heads * head_dim}"
+                        )
+                    q_mx = q_raw.reshape(q_raw.shape[0], q_raw.shape[1], num_heads, head_dim)
+                    q_mx = q_mx.transpose(0, 2, 1, 3)
+                    mx.eval(q_mx)
+                    q_np = np.array(q_mx).astype("float32")[0]
                 q_by_layer.append(q_np)
             q_by_layer_np = np.stack(q_by_layer, axis=0)
             k = min(args.pool_last_k, q_by_layer_np.shape[2])
@@ -913,10 +1016,12 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
             "model_path": args.model_path,
             "projection_path": projection_path,
             "projection_kind": "q_proj",
-            "q_capture_stage": "q_projection_output_pre_attention_position_rotation",
-            "q_capture_position_note": (
-                "For RoPE models this is pre-RoPE Q captured at the q_proj/wq output, "
-                "before rotary position embedding is applied inside attention."
+            "rope_path": rope_path if q_capture_stage == Q_STAGE_POST_ROPE else "",
+            "q_capture_stage": q_capture_stage,
+            "q_capture_position_note": q_capture_position_note(
+                q_capture_stage,
+                backend="mlx",
+                projection_kind="q_proj",
             ),
             "layers": n_layers,
             "heads": num_heads,
@@ -1192,8 +1297,10 @@ def save_figure(fig: Any, path: Path, *, show: bool) -> None:
 
 def q_capture_label(args: argparse.Namespace) -> str:
     stage = getattr(args, "q_capture_stage", "")
-    if stage == "q_projection_output_pre_attention_position_rotation":
+    if stage == Q_STAGE_PRE_ROPE:
         return "pre-RoPE Q projection output"
+    if stage == Q_STAGE_POST_ROPE:
+        return "post-RoPE Q, pre-score"
     return str(stage or "Q projection output")
 
 
@@ -3032,6 +3139,8 @@ def batch_summary_row(summary: dict[str, Any]) -> dict[str, Any]:
         "num_heads": summary.get("num_heads", ""),
         "head_dim": summary.get("head_dim", ""),
         "pool_last_k": summary.get("pool_last_k", ""),
+        "q_capture_stage": summary.get("q_capture_stage", ""),
+        "q_capture_label": summary.get("q_capture_label", ""),
         "target_layer": summary.get("target_layer", ""),
         "target_layer_relative_depth": summary.get("target_layer_relative_depth", ""),
         "target_head": summary.get("target_head", ""),
@@ -3054,6 +3163,7 @@ def batch_top_layer_head_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "backend": summary.get("backend", ""),
                 "model_path": summary.get("model_path", ""),
                 "dataset_source": (summary.get("dataset") or {}).get("dataset_source", ""),
+                "q_capture_stage": summary.get("q_capture_stage", ""),
                 "rank": rank,
                 "layer": row.get("layer", ""),
                 "head": row.get("head", ""),
@@ -3264,6 +3374,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-head", type=int, default=3)
     parser.add_argument("--pool-last-k", type=int, default=1)
     parser.add_argument(
+        "--q-capture-stage",
+        default="pre-rope",
+        help=(
+            "Which Q tensor to analyze. Use pre-rope for q_proj/wq output, or "
+            "post-rope for RoPE-applied Q before attention scoring. post-rope currently requires --backend mlx."
+        ),
+    )
+    parser.add_argument(
         "--pool-last-k-sweep",
         default="",
         help="Comma-separated pool_last_k values, e.g. 1,3,5. Reuses captured token Q per model.",
@@ -3403,6 +3521,10 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.pool_last_k < 1:
         parser.error("--pool-last-k must be >= 1")
+    try:
+        args.q_capture_stage = normalize_q_capture_stage(args.q_capture_stage)
+    except SystemExit as exc:
+        parser.error(str(exc))
     if args.pool_last_k_sweep:
         try:
             parse_positive_int_list(args.pool_last_k_sweep)

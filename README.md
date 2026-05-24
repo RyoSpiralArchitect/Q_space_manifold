@@ -42,7 +42,8 @@ concentrated in one head or distributed across weaker heads.
 ```
 
 This is still exploratory. The current evidence is geometric and predictive,
-not causal. Causal ablation and post-RoPE Q capture are planned follow-ups.
+not causal. Post-RoPE Q capture is now supported for MLX RoPE models; causal
+ablation remains a planned follow-up.
 
 ## Research Notes
 
@@ -88,6 +89,21 @@ Interpretation:
 ```text
 pre-RoPE Q  = content / stance routing vector
 post-RoPE Q = content + positional phase query used for attention scoring
+```
+
+To capture RoPE-applied Q vectors instead, use:
+
+```bash
+--q-capture-stage post-rope
+```
+
+The current post-RoPE implementation supports MLX RoPE models and captures the
+query tensor from the model's actual RoPE call before attention scaling/scoring.
+This makes pre/post comparison an explicit experimental axis:
+
+```text
+pre-RoPE  = stance routing before positional rotation
+post-RoPE = stance routing after positional phase is applied
 ```
 
 ## Representative Run
@@ -324,6 +340,7 @@ python q_space_manifold_monolith.py \
   --samples-per-class 100 \
   --target-layer-fraction 0.35 \
   --target-head 4 \
+  --q-capture-stage pre-rope \
   --projection pca \
   --detail-best-layer-head \
   --label-permutation-n 100 \
@@ -359,6 +376,26 @@ python q_space_manifold_monolith.py \
 `--plot-sample-limit` affects only all-sample trajectory and token-flow plots;
 CSV metrics, silhouettes, probes, and summaries still use the full captured
 dataset.
+
+To rerun the same probe after rotary position embedding:
+
+```bash
+python q_space_manifold_monolith.py \
+  --backend mlx \
+  --model-path mlx-community/Mistral-7B-Instruct-v0.3-4bit \
+  --dataset-source subj \
+  --samples-per-class 1000 \
+  --target-layer-fraction 0.35 \
+  --target-head 4 \
+  --q-capture-stage post-rope \
+  --projection pca \
+  --detail-best-layer-head \
+  --plot-3d \
+  --plot-sample-limit 200 \
+  --drop-special-tokens \
+  --flow-start-token-index 1 \
+  --output-dir /tmp/q_space_subj_n1000_post_rope
+```
 
 ## Cross-Model Phase Scan
 
@@ -478,9 +515,10 @@ query_flow_3d_layer_L_head_H_all.png
 
 - repeat the 12-cell SUBJ / prompted-SST-2 matrix on dense same-family
   checkpoints;
+- compare pre-RoPE and post-RoPE Q capture on the strongest 4bit heads before
+  treating the dense run as a final architecture check;
 - test whether Gemma's weaker single-head signal becomes stronger in 9B or
   appears as a multi-head / multi-layer distributed code;
-- implement post-RoPE Q capture as an option;
 - add causal ablation of candidate heads and measure downstream degradation.
 
 ## Caveats

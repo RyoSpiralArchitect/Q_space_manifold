@@ -216,8 +216,20 @@ Prompted SST-2:
 
 ## Next Matrix: Dense Same-Family Check
 
-The next natural move is to repeat this matrix on a larger MacBook Pro with
-dense checkpoints from the same families. That gives a clean 12-cell comparison:
+Before the dense run, the next natural move is to compare the strongest 4bit
+heads under post-RoPE Q capture:
+
+```bash
+--q-capture-stage post-rope
+```
+
+If the same heads or bands remain separable after rotary position phase is
+applied, the stance-routing interpretation gets stronger. If the peaks move or
+diffuse, then pre-RoPE and post-RoPE should be treated as distinct experimental
+surfaces.
+
+After that, repeat this matrix on a larger MacBook Pro with dense checkpoints
+from the same families. That gives a clean 12-cell comparison:
 
 ```text
 3 families x 2 tuning states x 2 task framings
@@ -241,6 +253,13 @@ The dense run should reuse the same analysis flags, including:
 --plot-sample-limit 200
 --drop-special-tokens
 --flow-start-token-index 1
+```
+
+Run both default pre-RoPE and post-RoPE variants when feasible:
+
+```text
+--q-capture-stage pre-rope
+--q-capture-stage post-rope
 ```
 
 The model IDs should be resolved on the target machine before download. The

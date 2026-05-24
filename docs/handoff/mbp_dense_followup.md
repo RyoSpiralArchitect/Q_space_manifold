@@ -20,9 +20,11 @@ Read these first:
 - docs/research_notes/sst2_base_vs_prompted.md
 
 The latest completed run is the n=1000/class 3D matrix over Mistral, Llama 3,
-and Gemma 2 2B base/instruct 4bit checkpoints. The next goal is to repeat the
-same SUBJ and prompted SST-2 matrix on dense same-family checkpoints on this
-MacBook Pro, keeping all analysis flags identical where possible.
+and Gemma 2 2B base/instruct 4bit checkpoints. Post-RoPE Q capture has now been
+implemented with `--q-capture-stage post-rope` for MLX RoPE models. The next
+goal is to compare pre-RoPE vs post-RoPE on the strongest 4bit heads, then
+repeat the same SUBJ and prompted SST-2 matrix on dense same-family checkpoints
+on this MacBook Pro, keeping all analysis flags identical where possible.
 ```
 
 ## Current Repository State
@@ -89,7 +91,8 @@ Compact tracked tables live in `examples/n1000_3d_matrix/`.
 
 ## Dense Follow-Up Shape
 
-The dense follow-up should be a same-family 12-cell matrix:
+Before dense, run a small post-RoPE comparison on the strongest 4bit heads. The
+dense follow-up should then be a same-family 12-cell matrix:
 
 ```text
 3 model families x 2 tuning states x 2 task framings
@@ -118,6 +121,18 @@ Keep these flags:
 --flow-start-token-index 1
 --plot-3d
 --plot-sample-limit 200
+```
+
+For post-RoPE comparison, add:
+
+```text
+--q-capture-stage post-rope
+```
+
+The default is still pre-RoPE:
+
+```text
+--q-capture-stage pre-rope
 ```
 
 For SST-2 also keep:
@@ -188,6 +203,8 @@ Prompted SST-2 template:
 
 Primary comparison:
 
+- Do the strongest 4bit heads survive post-RoPE, or does positional phase
+  smear/relocate the stance geometry?
 - Does Mistral remain an early/mid stable stance band?
 - Does Llama 3 instruct still migrate deeper and strengthen?
 - Does Gemma 2 2B-it remain flat/diffuse in dense form?
