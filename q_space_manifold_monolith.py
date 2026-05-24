@@ -922,24 +922,30 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
 
 
 def pca_2d(np: Any, x: Any) -> Any:
+    return pca_nd(np, x, n_components=2)
+
+
+def pca_nd(np: Any, x: Any, *, n_components: int) -> Any:
     x = np.asarray(x, dtype="float32")
+    n_components = max(1, int(n_components))
     if x.ndim != 2 or x.shape[0] == 0:
-        return np.zeros((0, 2), dtype="float32")
+        return np.zeros((0, n_components), dtype="float32")
     x_centered = x - x.mean(axis=0, keepdims=True)
-    k = min(2, x_centered.shape[0], x_centered.shape[1])
+    k = min(n_components, x_centered.shape[0], x_centered.shape[1])
     if k <= 0:
-        return np.zeros((x.shape[0], 2), dtype="float32")
+        return np.zeros((x.shape[0], n_components), dtype="float32")
     _, _, vt = np.linalg.svd(x_centered, full_matrices=False)
     z = x_centered @ vt[:k].T
-    if k < 2:
-        z = np.pad(z, ((0, 0), (0, 2 - k)))
+    if k < n_components:
+        z = np.pad(z, ((0, 0), (0, n_components - k)))
     return z.astype("float32")
 
 
-def compute_2d(
+def compute_nd(
     np: Any,
     x: Any,
     *,
+    n_components: int,
     n_neighbors: int = 5,
     min_dist: float = 0.3,
     metric: str = "cosine",
@@ -947,15 +953,17 @@ def compute_2d(
     projection: str = "umap",
 ) -> Any:
     x = np.asarray(x, dtype="float32")
+    n_components = max(1, int(n_components))
     if x.shape[0] <= 3 or projection == "pca":
-        return pca_2d(np, x)
+        return pca_nd(np, x, n_components=n_components)
     try:
         import umap  # type: ignore
     except ImportError:
         print("umap-learn is not installed; falling back to PCA.", file=sys.stderr)
-        return pca_2d(np, x)
+        return pca_nd(np, x, n_components=n_components)
     nn = max(2, min(n_neighbors, x.shape[0] - 1))
     reducer = umap.UMAP(
+        n_components=n_components,
         n_neighbors=nn,
         min_dist=min_dist,
         metric=metric,
@@ -968,6 +976,28 @@ def compute_2d(
             category=UserWarning,
         )
         return reducer.fit_transform(x)
+
+
+def compute_2d(
+    np: Any,
+    x: Any,
+    *,
+    n_neighbors: int = 5,
+    min_dist: float = 0.3,
+    metric: str = "cosine",
+    random_state: int = 42,
+    projection: str = "umap",
+) -> Any:
+    return compute_nd(
+        np,
+        x,
+        n_components=2,
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        metric=metric,
+        random_state=random_state,
+        projection=projection,
+    )
 
 
 def cosine_distance_matrix(np: Any, x: Any) -> Any:
@@ -1100,6 +1130,51 @@ def centroid_distance_summary(np: Any, x: Any, labels: Any, class_names: Sequenc
 
 def class_color(class_idx: int) -> str:
     return DEFAULT_COLORS[class_idx % len(DEFAULT_COLORS)]
+
+
+def projection_axis_label(args: argparse.Namespace, dimension: int) -> str:
+    name = "UMAP" if args.projection == "umap" else "PCA"
+    return f"{name} Dimension {dimension}"
+
+
+def plot_sample_indices(np: Any, sample_count: int, args: argparse.Namespace) -> list[int]:
+    limit = int(getattr(args, "plot_sample_limit", 0) or 0)
+    if limit <= 0 or limit >= sample_count:
+        return list(range(sample_count))
+    rng = np.random.default_rng(int(getattr(args, "random_state", 42)))
+    return sorted(int(index) for index in rng.choice(sample_count, size=limit, replace=False))
+
+
+def project_highd_paths(
+    np: Any,
+    highd_paths: Sequence[Any],
+    args: argparse.Namespace,
+    *,
+    n_components: int,
+) -> tuple[Any, list[Any]]:
+    token_counts = [len(path) for path in highd_paths]
+    nonempty = [np.asarray(path, dtype="float32") for path in highd_paths if len(path) > 0]
+    if not nonempty:
+        return np.zeros((0, n_components), dtype="float32"), [
+            np.zeros((0, n_components), dtype="float32") for _ in highd_paths
+        ]
+    all_q = np.concatenate(nonempty, axis=0)
+    all_emb = compute_nd(
+        np,
+        all_q,
+        n_components=n_components,
+        n_neighbors=10,
+        min_dist=0.2,
+        metric=args.metric,
+        random_state=args.random_state,
+        projection=args.projection,
+    )
+    paths = []
+    offset = 0
+    for token_count in token_counts:
+        paths.append(all_emb[offset : offset + token_count])
+        offset += token_count
+    return all_emb, paths
 
 
 def save_figure(fig: Any, path: Path, *, show: bool) -> None:
@@ -1565,7 +1640,7 @@ def plot_layer_trajectory(
 
     fig, ax = plt.subplots(figsize=(9, 7))
     if args.show_individual_trajectories:
-        for sample_idx in range(sample_count):
+        for sample_idx in plot_sample_indices(np, sample_count, args):
             ax.plot(emb[sample_idx, :, 0], emb[sample_idx, :, 1], alpha=0.15, linewidth=1)
     for class_idx, class_name in enumerate(class_names):
         idx = labels == class_idx
@@ -1582,14 +1657,86 @@ def plot_layer_trajectory(
             if layer_idx in {0, focus_layer_idx, n_layers - 1}:
                 ax.text(mean_path[layer_idx, 0], mean_path[layer_idx, 1], f"L{layer_idx}", fontsize=10)
     ax.set_title(f"Layer Trajectory of Q-Space - Head {head_idx}\n{q_capture_subtitle(args)}")
-    ax.set_xlabel("UMAP Dimension 1" if args.projection == "umap" else "PCA Dimension 1")
-    ax.set_ylabel("UMAP Dimension 2" if args.projection == "umap" else "PCA Dimension 2")
+    ax.set_xlabel(projection_axis_label(args, 1))
+    ax.set_ylabel(projection_axis_label(args, 2))
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.35)
     fig.tight_layout()
     save_figure(
         fig,
         output_dir / f"layer_trajectory_head_{head_idx}_focus_layer_{focus_layer_idx}.png",
+        show=args.show,
+    )
+    plt.close(fig)
+
+
+def plot_layer_trajectory_3d(
+    np: Any,
+    plt: Any,
+    final_q_all: Any,
+    labels: Any,
+    class_names: Sequence[str],
+    output_dir: Path,
+    args: argparse.Namespace,
+    *,
+    head_idx: int,
+    focus_layer_idx: int,
+) -> None:
+    sample_count, n_layers, _, head_dim = final_q_all.shape
+    x = final_q_all[:, :, head_idx, :].reshape(sample_count * n_layers, head_dim)
+    emb = compute_nd(
+        np,
+        x,
+        n_components=3,
+        n_neighbors=12,
+        min_dist=0.25,
+        metric=args.metric,
+        random_state=args.random_state,
+        projection=args.projection,
+    ).reshape(sample_count, n_layers, 3)
+
+    fig = plt.figure(figsize=(9, 7))
+    ax = fig.add_subplot(111, projection="3d")
+    if args.show_individual_trajectories:
+        for sample_idx in plot_sample_indices(np, sample_count, args):
+            ax.plot(
+                emb[sample_idx, :, 0],
+                emb[sample_idx, :, 1],
+                emb[sample_idx, :, 2],
+                alpha=0.12,
+                linewidth=1,
+            )
+    for class_idx, class_name in enumerate(class_names):
+        idx = labels == class_idx
+        mean_path = emb[idx].mean(axis=0)
+        ax.plot(
+            mean_path[:, 0],
+            mean_path[:, 1],
+            mean_path[:, 2],
+            marker="o",
+            linewidth=3,
+            color=class_color(class_idx),
+            label=class_name,
+        )
+        for layer_idx in range(n_layers):
+            if layer_idx in {0, focus_layer_idx, n_layers - 1}:
+                ax.text(
+                    mean_path[layer_idx, 0],
+                    mean_path[layer_idx, 1],
+                    mean_path[layer_idx, 2],
+                    f"L{layer_idx}",
+                    fontsize=10,
+                )
+    ax.view_init(elev=args.plot_3d_elev, azim=args.plot_3d_azim)
+    ax.set_title(f"3D Layer Trajectory of Q-Space - Head {head_idx}\n{q_capture_subtitle(args)}")
+    ax.set_xlabel(projection_axis_label(args, 1))
+    ax.set_ylabel(projection_axis_label(args, 2))
+    ax.set_zlabel(projection_axis_label(args, 3))
+    ax.legend()
+    fig.tight_layout()
+    save_figure(
+        fig,
+        output_dir / f"layer_trajectory_3d_head_{head_idx}_focus_layer_{focus_layer_idx}.png",
         show=args.show,
     )
     plt.close(fig)
@@ -2061,7 +2208,8 @@ def plot_query_flow(
         cmap = plt.get_cmap("viridis")
     if text_index is None:
         seen = set()
-        for sample_idx, path in enumerate(paths):
+        for sample_idx in plot_sample_indices(np, len(paths), args):
+            path = paths[sample_idx]
             if len(path) == 0:
                 continue
             label = int(labels[sample_idx])
@@ -2153,9 +2301,144 @@ def plot_query_flow(
         )
         suffix = "" if color_mode == "class" else f"_by_{color_mode}"
         output_name = f"query_flow_layer_{layer_idx}_head_{head_idx}_text_{text_index}{suffix}.png"
-    ax.set_xlabel("UMAP Dimension 1" if args.projection == "umap" else "PCA Dimension 1")
-    ax.set_ylabel("UMAP Dimension 2" if args.projection == "umap" else "PCA Dimension 2")
+    ax.set_xlabel(projection_axis_label(args, 1))
+    ax.set_ylabel(projection_axis_label(args, 2))
     ax.grid(True, linestyle="--", alpha=0.35)
+    fig.tight_layout()
+    save_figure(fig, output_dir / output_name, show=args.show)
+    plt.close(fig)
+
+
+def plot_query_flow_3d(
+    np: Any,
+    plt: Any,
+    all_emb: Any,
+    paths: Sequence[Any],
+    token_record_paths: Sequence[Sequence[dict[str, Any]]],
+    labels: Any,
+    class_names: Sequence[str],
+    texts: Sequence[str],
+    output_dir: Path,
+    args: argparse.Namespace,
+    *,
+    layer_idx: int,
+    head_idx: int,
+    text_index: int | None,
+) -> None:
+    fig = plt.figure(figsize=(9, 7))
+    ax = fig.add_subplot(111, projection="3d")
+    color_mode = args.color_flow_by
+    colorbar = None
+    if color_mode != "class":
+        all_values = [
+            float(record[color_mode])
+            for records in token_record_paths
+            for record in records
+        ]
+        vmin = min(all_values) if all_values else 0.0
+        vmax = max(all_values) if all_values else 1.0
+        norm = plt.Normalize(vmin=vmin, vmax=vmax if vmax > vmin else vmin + 1.0)
+        cmap = plt.get_cmap("viridis")
+    if text_index is None:
+        seen = set()
+        for sample_idx in plot_sample_indices(np, len(paths), args):
+            path = paths[sample_idx]
+            if len(path) == 0:
+                continue
+            label = int(labels[sample_idx])
+            class_name = class_names[label]
+            if color_mode == "class":
+                legend_label = class_name if class_name not in seen else None
+                seen.add(class_name)
+                ax.plot(
+                    path[:, 0],
+                    path[:, 1],
+                    path[:, 2],
+                    marker="o",
+                    markersize=3,
+                    alpha=0.28,
+                    linewidth=1.2,
+                    color=class_color(label),
+                    label=legend_label,
+                )
+            else:
+                values = [float(record[color_mode]) for record in token_record_paths[sample_idx]]
+                ax.plot(path[:, 0], path[:, 1], path[:, 2], alpha=0.16, linewidth=1.0, color="0.45")
+                colorbar = ax.scatter(
+                    path[:, 0],
+                    path[:, 1],
+                    path[:, 2],
+                    c=values,
+                    cmap=cmap,
+                    norm=norm,
+                    s=24,
+                    alpha=0.75,
+                )
+            ax.scatter(
+                path[0, 0],
+                path[0, 1],
+                path[0, 2],
+                marker="s",
+                s=18,
+                color=class_color(label) if color_mode == "class" else "0.25",
+                alpha=0.55,
+            )
+            ax.scatter(
+                path[-1, 0],
+                path[-1, 1],
+                path[-1, 2],
+                marker="^",
+                s=22,
+                color=class_color(label) if color_mode == "class" else "0.25",
+                alpha=0.75,
+            )
+        ax.set_title(
+            f"3D Question Stance Field / Token Q-flow\n"
+            f"Layer {layer_idx}, Head {head_idx}\n{q_capture_subtitle(args)}"
+        )
+        if color_mode == "class":
+            ax.legend()
+        elif colorbar is not None:
+            fig.colorbar(colorbar, ax=ax, label=color_mode, shrink=0.7)
+        suffix = "" if color_mode == "class" else f"_by_{color_mode}"
+        output_name = f"query_flow_3d_layer_{layer_idx}_head_{head_idx}_all{suffix}.png"
+    else:
+        path = paths[text_index]
+        if len(path) == 0:
+            ax.text2D(0.5, 0.5, "No tokens after flow filter", transform=ax.transAxes, ha="center")
+        else:
+            if color_mode == "class":
+                ax.plot(path[:, 0], path[:, 1], path[:, 2], marker="o", linewidth=2.2)
+            else:
+                values = [float(record[color_mode]) for record in token_record_paths[text_index]]
+                ax.plot(path[:, 0], path[:, 1], path[:, 2], linewidth=1.8, alpha=0.55, color="0.45")
+                colorbar = ax.scatter(
+                    path[:, 0],
+                    path[:, 1],
+                    path[:, 2],
+                    c=values,
+                    cmap=cmap,
+                    norm=norm,
+                    s=48,
+                    alpha=0.9,
+                )
+            ax.scatter(path[0, 0], path[0, 1], path[0, 2], marker="s", s=45, alpha=0.75)
+            ax.scatter(path[-1, 0], path[-1, 1], path[-1, 2], marker="^", s=55, alpha=0.9)
+            for token_idx, record in enumerate(token_record_paths[text_index]):
+                token_label = f"{record['token_idx']}:{record['token']}"
+                ax.text(path[token_idx, 0], path[token_idx, 1], path[token_idx, 2], token_label, fontsize=8)
+            if color_mode != "class" and colorbar is not None:
+                fig.colorbar(colorbar, ax=ax, label=color_mode, shrink=0.7)
+        ax.set_title(
+            f"3D Token-level Q-flow\nLayer {layer_idx}, Head {head_idx}\n{texts[text_index]}"
+            f"\n{q_capture_subtitle(args)}"
+        )
+        suffix = "" if color_mode == "class" else f"_by_{color_mode}"
+        output_name = f"query_flow_3d_layer_{layer_idx}_head_{head_idx}_text_{text_index}{suffix}.png"
+    ax.view_init(elev=args.plot_3d_elev, azim=args.plot_3d_azim)
+    ax.set_xlabel(projection_axis_label(args, 1))
+    ax.set_ylabel(projection_axis_label(args, 2))
+    ax.set_zlabel(projection_axis_label(args, 3))
     fig.tight_layout()
     save_figure(fig, output_dir / output_name, show=args.show)
     plt.close(fig)
@@ -2292,8 +2575,8 @@ def plot_query_flow_field(
         alpha=0.8,
     )
     ax.set_title(f"Coarse Q-flow Vector Field\nLayer {layer_idx}, Head {head_idx}\n{q_capture_subtitle(args)}")
-    ax.set_xlabel("UMAP Dimension 1" if args.projection == "umap" else "PCA Dimension 1")
-    ax.set_ylabel("UMAP Dimension 2" if args.projection == "umap" else "PCA Dimension 2")
+    ax.set_xlabel(projection_axis_label(args, 1))
+    ax.set_ylabel(projection_axis_label(args, 2))
     ax.grid(True, linestyle="--", alpha=0.35)
     fig.tight_layout()
     save_figure(fig, output_dir / f"query_flow_field_layer_{layer_idx}_head_{head_idx}.png", show=args.show)
@@ -2362,6 +2645,10 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
             "flow_start_token_index": args.flow_start_token_index,
             "drop_special_tokens": args.drop_special_tokens,
             "color_flow_by": args.color_flow_by,
+            "plot_3d": args.plot_3d,
+            "plot_sample_limit": args.plot_sample_limit,
+            "plot_3d_elev": args.plot_3d_elev,
+            "plot_3d_azim": args.plot_3d_azim,
             "detail_layer_heads": args.detail_layer_heads,
             "label_permutation_n": args.label_permutation_n,
             "label_shuffle_seed": args.label_shuffle_seed if args.label_shuffle_seed is not None else args.random_state,
@@ -2565,6 +2852,18 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
                 head_idx=head_idx,
                 focus_layer_idx=layer_idx,
             )
+            if args.plot_3d:
+                plot_layer_trajectory_3d(
+                    np,
+                    plt,
+                    final_q_all,
+                    labels,
+                    dataset.class_names,
+                    output_dir,
+                    args,
+                    head_idx=head_idx,
+                    focus_layer_idx=layer_idx,
+                )
             plot_query_flow(
                 np,
                 plt,
@@ -2580,6 +2879,24 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
                 head_idx=head_idx,
                 text_index=None,
             )
+            paths_3d = None
+            if args.plot_3d:
+                _, paths_3d = project_highd_paths(np, highd_paths, args, n_components=3)
+                plot_query_flow_3d(
+                    np,
+                    plt,
+                    np.concatenate(paths_3d, axis=0) if paths_3d else np.zeros((0, 3), dtype="float32"),
+                    paths_3d,
+                    token_record_paths,
+                    labels,
+                    dataset.class_names,
+                    dataset.texts,
+                    output_dir,
+                    args,
+                    layer_idx=layer_idx,
+                    head_idx=head_idx,
+                    text_index=None,
+                )
             if args.detail_text_index is not None:
                 plot_query_flow(
                     np,
@@ -2596,6 +2913,24 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
                     head_idx=head_idx,
                     text_index=args.detail_text_index,
                 )
+                if args.plot_3d:
+                    if paths_3d is None:
+                        _, paths_3d = project_highd_paths(np, highd_paths, args, n_components=3)
+                    plot_query_flow_3d(
+                        np,
+                        plt,
+                        np.concatenate(paths_3d, axis=0) if paths_3d else np.zeros((0, 3), dtype="float32"),
+                        paths_3d,
+                        token_record_paths,
+                        labels,
+                        dataset.class_names,
+                        dataset.texts,
+                        output_dir,
+                        args,
+                        layer_idx=layer_idx,
+                        head_idx=head_idx,
+                        text_index=args.detail_text_index,
+                    )
             plot_query_flow_field(
                 np,
                 plt,
@@ -2994,6 +3329,29 @@ def parse_args() -> argparse.Namespace:
         help="Color token Q-flow plots by class or token position.",
     )
     parser.add_argument(
+        "--plot-3d",
+        action="store_true",
+        help="Also write 3D layer-trajectory and token Q-flow plots for detailed layer/head probes.",
+    )
+    parser.add_argument(
+        "--plot-sample-limit",
+        type=int,
+        default=0,
+        help="Limit all-sample trajectory/flow plots to N sampled texts. 0 plots all samples; metrics still use all samples.",
+    )
+    parser.add_argument(
+        "--plot-3d-elev",
+        type=float,
+        default=22.0,
+        help="Matplotlib elevation angle for --plot-3d outputs.",
+    )
+    parser.add_argument(
+        "--plot-3d-azim",
+        type=float,
+        default=-58.0,
+        help="Matplotlib azimuth angle for --plot-3d outputs.",
+    )
+    parser.add_argument(
         "--flow-start-token-index",
         type=int,
         default=0,
@@ -3050,6 +3408,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--label-permutation-n must be >= 0")
     if args.detail_text_index is not None and args.detail_text_index < 0:
         parser.error("--detail-text-index must be >= 0")
+    if args.plot_sample_limit < 0:
+        parser.error("--plot-sample-limit must be >= 0")
     if args.flow_start_token_index < 0:
         parser.error("--flow-start-token-index must be >= 0")
     return args

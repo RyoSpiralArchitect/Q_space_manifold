@@ -281,6 +281,30 @@ python q_space_manifold_monolith.py \
   --output-dir /tmp/q_space_phase_scan_subj
 ```
 
+For larger runs, keep the metrics on the full sample but make the plots readable
+with plot-only downsampling and optional 3D views:
+
+```bash
+python q_space_manifold_monolith.py \
+  --backend mlx \
+  --model-path mlx-community/Mistral-7B-Instruct-v0.3-4bit \
+  --dataset-source subj \
+  --samples-per-class 1000 \
+  --target-layer-fraction 0.35 \
+  --target-head 4 \
+  --projection pca \
+  --detail-best-layer-head \
+  --plot-3d \
+  --plot-sample-limit 200 \
+  --drop-special-tokens \
+  --flow-start-token-index 1 \
+  --output-dir /tmp/q_space_subj_n1000_plots
+```
+
+`--plot-sample-limit` affects only all-sample trajectory and token-flow plots;
+CSV metrics, silhouettes, probes, and summaries still use the full captured
+dataset.
+
 ## Cross-Model Phase Scan
 
 Use `--batch-models` to compare models with the same dataset and metrics.
@@ -391,6 +415,8 @@ head_rsa_matrix_layer_L.csv
 head_similarity_pairs_layer_L.csv
 head_cka_heatmap_layer_L.png
 head_rsa_heatmap_layer_L.png
+layer_trajectory_3d_head_H_focus_layer_L.png
+query_flow_3d_layer_L_head_H_all.png
 ```
 
 ## Near-Term Research Directions
