@@ -452,6 +452,12 @@ def normalize_rows(rows: Any) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def effective_linear_probe_permutation_n(args: argparse.Namespace) -> int:
+    if args.linear_probe_permutation_n is None:
+        return int(args.label_permutation_n)
+    return int(args.linear_probe_permutation_n)
+
+
 def score_sort_key(row: dict[str, Any]) -> float:
     score = float(row["silhouette_cosine"])
     return score if not math.isnan(score) else -999.0
@@ -2657,6 +2663,7 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
             "projection_knn_k": args.projection_knn_k,
             "probe_linear": args.probe_linear,
             "linear_probe_alpha": args.linear_probe_alpha,
+            "linear_probe_permutation_n": effective_linear_probe_permutation_n(args),
             "head_similarity": args.head_similarity,
             "head_similarity_layers": args.head_similarity_layers,
             "q_capture_stage": args.q_capture_stage,
@@ -2766,7 +2773,7 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
             labels,
             detail_layer_heads,
             alpha=args.linear_probe_alpha,
-            n_permutations=args.label_permutation_n,
+            n_permutations=effective_linear_probe_permutation_n(args),
             seed=(args.label_shuffle_seed if args.label_shuffle_seed is not None else args.random_state) + 1009,
         )
         if args.probe_linear
@@ -3295,6 +3302,15 @@ def parse_args() -> argparse.Namespace:
         help="Ridge alpha for --probe-linear.",
     )
     parser.add_argument(
+        "--linear-probe-permutation-n",
+        type=int,
+        default=None,
+        help=(
+            "Random-label null permutations for --probe-linear. "
+            "Defaults to --label-permutation-n; set 0 for large plotting runs."
+        ),
+    )
+    parser.add_argument(
         "--head-similarity",
         action="store_true",
         help="Compute within-layer head RSA and linear CKA matrices for selected layers.",
@@ -3404,6 +3420,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--projection-knn-k must be >= 1")
     if args.linear_probe_alpha <= 0:
         parser.error("--linear-probe-alpha must be > 0")
+    if args.linear_probe_permutation_n is not None and args.linear_probe_permutation_n < 0:
+        parser.error("--linear-probe-permutation-n must be >= 0")
     if args.label_permutation_n < 0:
         parser.error("--label-permutation-n must be >= 0")
     if args.detail_text_index is not None and args.detail_text_index < 0:
