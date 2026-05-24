@@ -218,13 +218,13 @@ Gemma 2 2B:
 
 ![Head manifolds](assets/head_manifolds_layer_11.png)
 
-### Layer Trajectory for the Best Head
+### 3D Layer Trajectory for the Best Head
 
-![Layer trajectory](assets/layer_trajectory_head_22_focus_layer_11.png)
+![3D layer trajectory](assets/layer_trajectory_3d_head_22_focus_layer_11.png)
 
-### Token-Level Q-Flow
+### 3D Token-Level Q-Flow
 
-![Token Q-flow](assets/query_flow_layer_11_head_22_all.png)
+![3D token Q-flow](assets/query_flow_3d_layer_11_head_22_all.png)
 
 ### Head Similarity: CKA and RSA
 
