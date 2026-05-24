@@ -226,7 +226,9 @@ heads under post-RoPE Q capture:
 If the same heads or bands remain separable after rotary position phase is
 applied, the stance-routing interpretation gets stronger. If the peaks move or
 diffuse, then pre-RoPE and post-RoPE should be treated as distinct experimental
-surfaces.
+surfaces. The first small Mistral-IT check is recorded in
+[Pre/Post-RoPE SUBJ Pilot](pre_post_rope_subj_pilot.md): the signal survives
+after RoPE, but becomes weaker, broader, and partly later.
 
 After that, repeat this matrix on a larger MacBook Pro with dense checkpoints
 from the same families. That gives a clean 12-cell comparison:

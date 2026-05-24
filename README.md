@@ -51,6 +51,9 @@ ablation remains a planned follow-up.
   the first medium-scale 6-model pass across SUBJ and prompted SST-2. SUBJ
   preserves the Mistral/Llama/Gemma family split, while prompted SST-2 shows
   strong instruction-tuned sentiment-query heads in Mistral and Llama 3.
+- [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
+  an initial Mistral-IT check where stance separation survives after RoPE but
+  becomes weaker, broader, and partly later than the sharper pre-RoPE surface.
 - [Base vs instruction-tuned SUBJ scan](docs/research_notes/base_vs_instruct_subj.md):
   Mistral appears stable, Llama 3 migrates deeper, and Gemma 2 2B flattens or
   diffuses its single-head Q-space stance axis after instruction tuning.
