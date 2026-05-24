@@ -1,0 +1,7 @@
+model_alias,backend,model_path,dataset_source,sample_count,n_layers,num_heads,head_dim,pool_last_k,target_layer,target_layer_relative_depth,target_head,best_head_at_target_layer,best_head_at_target_layer_score,best_layer,best_head,best_layer_relative_depth,best_layer_head_silhouette_cosine,output_dir
+mistral_base,mlx,mlx-community/Mistral-7B-v0.3-4bit,subj,2000,32,32,128,1,11,0.3548387096774194,4,22,0.21304680194195522,10,6,0.3225806451612903,0.22697053733254607,/tmp/q_space_subj_n1000_base_vs_it_3d/mistral_base
+mistral_it,mlx,mlx-community/Mistral-7B-Instruct-v0.3-4bit,subj,2000,32,32,128,1,11,0.3548387096774194,4,22,0.2120910834515028,7,15,0.22580645161290322,0.21544595090232488,/tmp/q_space_subj_n1000_base_vs_it_3d/mistral_it
+llama3_base,mlx,mlx-community/Meta-Llama-3-8B-4bit,subj,2000,32,32,128,1,11,0.3548387096774194,4,6,0.17583673512323109,11,6,0.3548387096774194,0.17583673512323109,/tmp/q_space_subj_n1000_base_vs_it_3d/llama3_base
+llama3_it,mlx,mlx-community/Meta-Llama-3-8B-Instruct-4bit,subj,2000,32,32,128,1,11,0.3548387096774194,4,18,0.17893247617197386,20,31,0.6451612903225806,0.2187041331644828,/tmp/q_space_subj_n1000_base_vs_it_3d/llama3_it
+gemma2_2b_base,mlx,mlx-community/gemma-2-2b-4bit,subj,2000,26,8,256,1,9,0.36,4,6,0.15059601544602094,21,4,0.84,0.1663277455702913,/tmp/q_space_subj_n1000_base_vs_it_3d/gemma2_2b_base
+gemma2_2b_it,mlx,mlx-community/gemma-2-2b-it-4bit,subj,2000,26,8,256,1,9,0.36,4,7,0.019444431137646066,1,0,0.04,0.034547239098076075,/tmp/q_space_subj_n1000_base_vs_it_3d/gemma2_2b_it

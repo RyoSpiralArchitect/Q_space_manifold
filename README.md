@@ -46,6 +46,10 @@ not causal. Causal ablation and post-RoPE Q capture are planned follow-ups.
 
 ## Research Notes
 
+- [N=1000/class 3D base-vs-instruct matrix](docs/research_notes/n1000_3d_matrix.md):
+  the first medium-scale 6-model pass across SUBJ and prompted SST-2. SUBJ
+  preserves the Mistral/Llama/Gemma family split, while prompted SST-2 shows
+  strong instruction-tuned sentiment-query heads in Mistral and Llama 3.
 - [Base vs instruction-tuned SUBJ scan](docs/research_notes/base_vs_instruct_subj.md):
   Mistral appears stable, Llama 3 migrates deeper, and Gemma 2 2B flattens or
   diffuses its single-head Q-space stance axis after instruction tuning.
@@ -56,6 +60,11 @@ not causal. Causal ablation and post-RoPE Q capture are planned follow-ups.
 - [SST-2 base-vs-instruct and prompt framing](docs/research_notes/sst2_base_vs_prompted.md):
   naked SST-2 stays weak, but `Review: {text}\nSentiment:` strongly lights up
   late sentiment-query heads in Mistral and Llama 3.
+
+For moving the work to another machine or fresh thread, see
+[MBP dense follow-up handoff](docs/handoff/mbp_dense_followup.md). A compact
+machine-readable companion is available as
+`docs/handoff/mbp_dense_followup.jsonl`.
 
 ## What Is Being Measured?
 
@@ -153,6 +162,52 @@ may express the signal more weakly or more diffusely.
 ```
 
 The raw summary files are in `examples/subj_3models/`.
+
+## Medium-Scale 3D Matrix
+
+The first larger pass uses `1000` samples per class and 3D plot downsampling
+across six base/instruction-tuned 4bit configurations:
+
+```text
+Mistral-7B base / instruct
+Llama-3-8B base / instruct
+Gemma-2-2B base / instruct
+```
+
+Compact tracked summaries are in `examples/n1000_3d_matrix/`; the full plot and
+vector artifacts are left under `/tmp`.
+
+SUBJ best layer/head:
+
+| model | best layer/head | silhouette |
+| --- | ---: | ---: |
+| Mistral-7B base | L10/H6 | 0.2270 |
+| Mistral-7B instruct | L7/H15 | 0.2154 |
+| Llama-3-8B base | L11/H6 | 0.1758 |
+| Llama-3-8B instruct | L20/H31 | 0.2187 |
+| Gemma-2-2B base | L21/H4 | 0.1663 |
+| Gemma-2-2B-it | L1/H0 | 0.0345 |
+
+Prompted SST-2 strongest row by model across `pool_last_k=1,3,5`:
+
+| model | strongest row | silhouette |
+| --- | ---: | ---: |
+| Mistral-7B base | k=5 L10/H21 | 0.0978 |
+| Mistral-7B instruct | k=1 L23/H30 | 0.1726 |
+| Llama-3-8B base | k=1 L20/H24 | 0.1205 |
+| Llama-3-8B instruct | k=1 L18/H28 | 0.2246 |
+| Gemma-2-2B base | k=5 L12/H4 | 0.0587 |
+| Gemma-2-2B-it | k=5 L12/H3 | 0.0266 |
+
+This turns the working hypothesis into a 12-cell comparison:
+
+```text
+3 model families x 2 tuning states x 2 task framings
+```
+
+The next planned version repeats the same matrix with dense same-family
+checkpoints on a larger MacBook Pro to separate architecture/tuning effects from
+4bit quantization effects.
 
 ## Head Similarity: Specialization vs Redundancy
 
@@ -421,12 +476,10 @@ query_flow_3d_layer_L_head_H_all.png
 
 ## Near-Term Research Directions
 
-- repeat the Mistral/Llama/Gemma scan on larger SUBJ/SST-2 samples;
+- repeat the 12-cell SUBJ / prompted-SST-2 matrix on dense same-family
+  checkpoints;
 - test whether Gemma's weaker single-head signal becomes stronger in 9B or
   appears as a multi-head / multi-layer distributed code;
-- compare base vs instruction-tuned checkpoints;
-- run prompted SST-2 on base checkpoints;
-- inspect whether strong heads are redundant via RSA/CKA;
 - implement post-RoPE Q capture as an option;
 - add causal ablation of candidate heads and measure downstream degradation.
 

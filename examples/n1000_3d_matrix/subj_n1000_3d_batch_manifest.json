@@ -1,0 +1,184 @@
+{
+  "created_at": "2026-05-24T16:46:23.797649+00:00",
+  "dataset": {
+    "dataset_source": "subj",
+    "hf_dataset_name": "SetFit/subj",
+    "hf_dataset_config": null,
+    "dataset_split": "train",
+    "text_column": "text",
+    "label_column": "label",
+    "samples_per_class": 1000,
+    "max_samples": 0,
+    "dataset_seed": 42,
+    "sample_count": 2000,
+    "class_counts": {
+      "subjective": 1000,
+      "objective": 1000
+    },
+    "raw_label_to_label": {
+      "0": 0,
+      "1": 1
+    }
+  },
+  "model_count": 6,
+  "models": [
+    {
+      "alias": "mistral_base",
+      "backend": "mlx",
+      "model_path": "mlx-community/Mistral-7B-v0.3-4bit"
+    },
+    {
+      "alias": "mistral_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+    },
+    {
+      "alias": "llama3_base",
+      "backend": "mlx",
+      "model_path": "mlx-community/Meta-Llama-3-8B-4bit"
+    },
+    {
+      "alias": "llama3_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/Meta-Llama-3-8B-Instruct-4bit"
+    },
+    {
+      "alias": "gemma2_2b_base",
+      "backend": "mlx",
+      "model_path": "mlx-community/gemma-2-2b-4bit"
+    },
+    {
+      "alias": "gemma2_2b_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/gemma-2-2b-it-4bit"
+    }
+  ],
+  "summary_rows": [
+    {
+      "model_alias": "mistral_base",
+      "backend": "mlx",
+      "model_path": "mlx-community/Mistral-7B-v0.3-4bit",
+      "dataset_source": "subj",
+      "sample_count": 2000,
+      "n_layers": 32,
+      "num_heads": 32,
+      "head_dim": 128,
+      "pool_last_k": 1,
+      "target_layer": 11,
+      "target_layer_relative_depth": 0.3548387096774194,
+      "target_head": 4,
+      "best_head_at_target_layer": 22,
+      "best_head_at_target_layer_score": 0.21304680194195522,
+      "best_layer": 10,
+      "best_head": 6,
+      "best_layer_relative_depth": 0.3225806451612903,
+      "best_layer_head_silhouette_cosine": 0.22697053733254607,
+      "output_dir": "/tmp/q_space_subj_n1000_base_vs_it_3d/mistral_base"
+    },
+    {
+      "model_alias": "mistral_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
+      "dataset_source": "subj",
+      "sample_count": 2000,
+      "n_layers": 32,
+      "num_heads": 32,
+      "head_dim": 128,
+      "pool_last_k": 1,
+      "target_layer": 11,
+      "target_layer_relative_depth": 0.3548387096774194,
+      "target_head": 4,
+      "best_head_at_target_layer": 22,
+      "best_head_at_target_layer_score": 0.2120910834515028,
+      "best_layer": 7,
+      "best_head": 15,
+      "best_layer_relative_depth": 0.22580645161290322,
+      "best_layer_head_silhouette_cosine": 0.21544595090232488,
+      "output_dir": "/tmp/q_space_subj_n1000_base_vs_it_3d/mistral_it"
+    },
+    {
+      "model_alias": "llama3_base",
+      "backend": "mlx",
+      "model_path": "mlx-community/Meta-Llama-3-8B-4bit",
+      "dataset_source": "subj",
+      "sample_count": 2000,
+      "n_layers": 32,
+      "num_heads": 32,
+      "head_dim": 128,
+      "pool_last_k": 1,
+      "target_layer": 11,
+      "target_layer_relative_depth": 0.3548387096774194,
+      "target_head": 4,
+      "best_head_at_target_layer": 6,
+      "best_head_at_target_layer_score": 0.17583673512323109,
+      "best_layer": 11,
+      "best_head": 6,
+      "best_layer_relative_depth": 0.3548387096774194,
+      "best_layer_head_silhouette_cosine": 0.17583673512323109,
+      "output_dir": "/tmp/q_space_subj_n1000_base_vs_it_3d/llama3_base"
+    },
+    {
+      "model_alias": "llama3_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/Meta-Llama-3-8B-Instruct-4bit",
+      "dataset_source": "subj",
+      "sample_count": 2000,
+      "n_layers": 32,
+      "num_heads": 32,
+      "head_dim": 128,
+      "pool_last_k": 1,
+      "target_layer": 11,
+      "target_layer_relative_depth": 0.3548387096774194,
+      "target_head": 4,
+      "best_head_at_target_layer": 18,
+      "best_head_at_target_layer_score": 0.17893247617197386,
+      "best_layer": 20,
+      "best_head": 31,
+      "best_layer_relative_depth": 0.6451612903225806,
+      "best_layer_head_silhouette_cosine": 0.2187041331644828,
+      "output_dir": "/tmp/q_space_subj_n1000_base_vs_it_3d/llama3_it"
+    },
+    {
+      "model_alias": "gemma2_2b_base",
+      "backend": "mlx",
+      "model_path": "mlx-community/gemma-2-2b-4bit",
+      "dataset_source": "subj",
+      "sample_count": 2000,
+      "n_layers": 26,
+      "num_heads": 8,
+      "head_dim": 256,
+      "pool_last_k": 1,
+      "target_layer": 9,
+      "target_layer_relative_depth": 0.36,
+      "target_head": 4,
+      "best_head_at_target_layer": 6,
+      "best_head_at_target_layer_score": 0.15059601544602094,
+      "best_layer": 21,
+      "best_head": 4,
+      "best_layer_relative_depth": 0.84,
+      "best_layer_head_silhouette_cosine": 0.1663277455702913,
+      "output_dir": "/tmp/q_space_subj_n1000_base_vs_it_3d/gemma2_2b_base"
+    },
+    {
+      "model_alias": "gemma2_2b_it",
+      "backend": "mlx",
+      "model_path": "mlx-community/gemma-2-2b-it-4bit",
+      "dataset_source": "subj",
+      "sample_count": 2000,
+      "n_layers": 26,
+      "num_heads": 8,
+      "head_dim": 256,
+      "pool_last_k": 1,
+      "target_layer": 9,
+      "target_layer_relative_depth": 0.36,
+      "target_head": 4,
+      "best_head_at_target_layer": 7,
+      "best_head_at_target_layer_score": 0.019444431137646066,
+      "best_layer": 1,
+      "best_head": 0,
+      "best_layer_relative_depth": 0.04,
+      "best_layer_head_silhouette_cosine": 0.034547239098076075,
+      "output_dir": "/tmp/q_space_subj_n1000_base_vs_it_3d/gemma2_2b_it"
+    }
+  ]
+}
