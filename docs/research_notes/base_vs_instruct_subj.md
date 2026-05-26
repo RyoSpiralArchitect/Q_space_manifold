@@ -3,9 +3,8 @@
 Date: 2026-05-24
 
 This note records an early base-vs-instruction-tuned comparison on the SUBJ
-dataset. The goal is to test whether the stance-separating Q-space phase is a
-generic artifact of the probe or whether it changes with model family and
-alignment tuning.
+dataset. The goal is to test whether the measured stance-separating Q-space
+geometry changes with model family and instruction tuning.
 
 The scan used:
 
@@ -85,10 +84,10 @@ This adds texture to the headline pattern:
 
 ## Working Interpretation
 
-These observations are hard to explain as a single projection artifact: a pure
-artifact would be expected to make the three model families collapse into the
-same qualitative shape. Instead, the probe sees different alignment
-interactions:
+These observations are not enough to rule out every artifact. They are best read
+as a structured hypothesis generator: the probe sees different family/tuning
+interactions that should be checked against random-label nulls, pre/post-RoPE
+capture, sample-size stability, and causal ablation.
 
 ```text
 Mistral: alignment preserves the stance phase.
@@ -96,8 +95,8 @@ Llama 3: alignment relocates and strengthens the stance phase.
 Gemma 2 2B: alignment diffuses or flattens the single-head stance phase.
 ```
 
-The evidence is still correlational. The stronger claim would require
-post-RoPE comparison and causal ablation.
+The evidence is still correlational. The stronger claim requires post-RoPE
+comparison beyond the current pilot, sample-size stability, and causal ablation.
 
 ## Next Checks
 
@@ -109,4 +108,3 @@ post-RoPE comparison and causal ablation.
   available.
 - Add causal ablation of candidate heads after the geometry is stable across
   datasets.
-

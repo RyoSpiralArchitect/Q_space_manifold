@@ -1631,38 +1631,124 @@ def label_permutation_rows(
         layer_idx = int(probe["layer"])
         head_idx = int(probe["head"])
         x = final_q_all[:, layer_idx, head_idx, :]
-        actual = safe_silhouette(np, x, labels_array)
-        null_scores = []
-        for _ in range(n_permutations):
-            shuffled = rng.permutation(labels_array)
-            null_scores.append(safe_silhouette(np, x, shuffled))
-        finite_null = [float(score) for score in null_scores if math.isfinite(float(score))]
-        if finite_null and math.isfinite(float(actual)):
-            null_mean = float(np.mean(finite_null))
-            null_std = float(np.std(finite_null))
-            null_max = float(np.max(finite_null))
-            p_ge_actual = (1 + sum(score >= float(actual) for score in finite_null)) / (len(finite_null) + 1)
-        else:
-            null_mean = float("nan")
-            null_std = float("nan")
-            null_max = float("nan")
-            p_ge_actual = float("nan")
-        rows.append(
+        summary = silhouette_permutation_summary(
+            np,
+            x,
+            labels_array,
+            n_permutations=n_permutations,
+            rng=rng,
+        )
+        row = {
+            "layer": layer_idx,
+            "head": head_idx,
+            "reason": probe.get("reason", ""),
+            **summary,
+            "n_permutations": n_permutations,
+            "seed": seed,
+        }
+        if "rank" in probe:
+            row["rank"] = probe["rank"]
+        rows.append(row)
+    return rows
+
+
+def silhouette_permutation_summary(
+    np: Any,
+    x: Any,
+    labels_array: Any,
+    *,
+    n_permutations: int,
+    rng: Any,
+) -> dict[str, Any]:
+    dist = cosine_distance_matrix(np, x)
+    actual = silhouette_from_distance(np, dist, labels_array)
+    null_scores = []
+    for _ in range(n_permutations):
+        shuffled = rng.permutation(labels_array)
+        null_scores.append(silhouette_from_distance(np, dist, shuffled))
+    finite_null = [float(score) for score in null_scores if math.isfinite(float(score))]
+    if finite_null and math.isfinite(float(actual)):
+        null_mean = float(np.mean(finite_null))
+        null_std = float(np.std(finite_null))
+        null_max = float(np.max(finite_null))
+        p_ge_actual = (1 + sum(score >= float(actual) for score in finite_null)) / (len(finite_null) + 1)
+        z_score = (float(actual) - null_mean) / null_std if null_std > 1e-12 else float("nan")
+    else:
+        null_mean = float("nan")
+        null_std = float("nan")
+        null_max = float("nan")
+        p_ge_actual = float("nan")
+        z_score = float("nan")
+    return {
+        "actual_silhouette_cosine": actual,
+        "null_mean": null_mean,
+        "null_std": null_std,
+        "null_z_score": z_score,
+        "null_max": null_max,
+        "p_ge_actual": p_ge_actual,
+        "finite_null_count": len(finite_null),
+    }
+
+
+def top_layer_head_permutation_rows(
+    np: Any,
+    final_q_all: Any,
+    labels: Any,
+    layer_head_scores: Sequence[dict[str, Any]],
+    *,
+    rank_limit: int,
+    n_permutations: int,
+    seed: int,
+) -> list[dict[str, Any]]:
+    if rank_limit <= 0 or n_permutations <= 0:
+        return []
+    probes = []
+    for rank, row in enumerate(layer_head_scores[:rank_limit], start=1):
+        probes.append(
             {
-                "layer": layer_idx,
-                "head": head_idx,
-                "reason": probe.get("reason", ""),
-                "actual_silhouette_cosine": actual,
-                "null_mean": null_mean,
-                "null_std": null_std,
-                "null_max": null_max,
-                "p_ge_actual": p_ge_actual,
-                "n_permutations": n_permutations,
-                "finite_null_count": len(finite_null),
-                "seed": seed,
+                "layer": int(row["layer"]),
+                "head": int(row["head"]),
+                "rank": rank,
+                "reason": f"top_layer_head_rank_{rank}",
             }
         )
-    return rows
+    return label_permutation_rows(
+        np,
+        final_q_all,
+        labels,
+        probes,
+        n_permutations=n_permutations,
+        seed=seed,
+    )
+
+
+def permutation_rows_by_layer_head(rows: Sequence[dict[str, Any]]) -> dict[tuple[int, int], dict[str, Any]]:
+    lookup = {}
+    for row in rows:
+        lookup[(int(row["layer"]), int(row["head"]))] = row
+    return lookup
+
+
+def silhouette_null_columns(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row:
+        return {
+            "silhouette_null_mean": "",
+            "silhouette_null_std": "",
+            "silhouette_null_z_score": "",
+            "silhouette_null_max": "",
+            "silhouette_p_ge_actual": "",
+            "silhouette_null_n_permutations": "",
+            "silhouette_finite_null_count": "",
+        }
+    return {
+        "silhouette_null_mean": row.get("null_mean", ""),
+        "silhouette_null_std": row.get("null_std", ""),
+        "silhouette_null_z_score": row.get("null_z_score", ""),
+        "silhouette_null_max": row.get("null_max", ""),
+        "silhouette_p_ge_actual": row.get("p_ge_actual", ""),
+        "silhouette_null_n_permutations": row.get("n_permutations", ""),
+        "silhouette_finite_null_count": row.get("finite_null_count", ""),
+    }
 
 
 def plot_layer_head_heatmap(
@@ -2764,6 +2850,7 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
             "plot_3d_azim": args.plot_3d_azim,
             "detail_layer_heads": args.detail_layer_heads,
             "label_permutation_n": args.label_permutation_n,
+            "top_layer_head_null_rank_limit": args.top_layer_head_null_rank_limit,
             "label_shuffle_seed": args.label_shuffle_seed if args.label_shuffle_seed is not None else args.random_state,
             "high_d_flow_metrics": args.high_d_flow_metrics,
             "projection_diagnostics": args.projection_diagnostics,
@@ -2872,6 +2959,21 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
     )
     if permutation_rows:
         write_csv_rows(output_dir / "label_permutation_summary.csv", permutation_rows)
+
+    top_layer_head_permutation_summary = top_layer_head_permutation_rows(
+        np,
+        final_q_all,
+        labels,
+        layer_head_scores,
+        rank_limit=args.top_layer_head_null_rank_limit,
+        n_permutations=args.label_permutation_n,
+        seed=(args.label_shuffle_seed if args.label_shuffle_seed is not None else args.random_state) + 503,
+    )
+    if top_layer_head_permutation_summary:
+        write_csv_rows(
+            output_dir / "top_layer_head_label_permutation_summary.csv",
+            top_layer_head_permutation_summary,
+        )
 
     linear_probe_summary = (
         linear_probe_rows(
@@ -3086,11 +3188,13 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
         "drop_special_tokens": args.drop_special_tokens,
         "color_flow_by": args.color_flow_by,
         "label_permutation_n": args.label_permutation_n,
+        "top_layer_head_null_rank_limit": args.top_layer_head_null_rank_limit,
         "label_shuffle_seed": args.label_shuffle_seed if args.label_shuffle_seed is not None else args.random_state,
         "top_head_scores": head_scores[: min(5, len(head_scores))],
         "top_layer_head_scores": layer_head_scores[: min(10, len(layer_head_scores))],
         "detailed_layer_heads": detail_layer_heads,
         "label_permutation_summary": permutation_rows,
+        "top_layer_head_label_permutation_summary": top_layer_head_permutation_summary,
         "linear_probe_summary": linear_probe_summary,
         "projection_diagnostics": projection_diagnostic_rows,
         "head_similarity_summaries": head_similarity_summaries,
@@ -3129,7 +3233,11 @@ def run_single_analysis(args: argparse.Namespace, dataset: TextDataset) -> dict[
 def batch_summary_row(summary: dict[str, Any]) -> dict[str, Any]:
     best = summary.get("best_layer_head_by_silhouette") or {}
     target_top = (summary.get("top_head_scores") or [{}])[0]
-    return {
+    null_lookup = permutation_rows_by_layer_head(summary.get("top_layer_head_label_permutation_summary") or [])
+    best_null = None
+    if best.get("layer") != "" and best.get("head") != "":
+        best_null = null_lookup.get((int(best.get("layer")), int(best.get("head"))))
+    row = {
         "model_alias": summary.get("model_alias", ""),
         "backend": summary.get("backend", ""),
         "model_path": summary.get("model_path", ""),
@@ -3152,27 +3260,33 @@ def batch_summary_row(summary: dict[str, Any]) -> dict[str, Any]:
         "best_layer_head_silhouette_cosine": best.get("silhouette_cosine", ""),
         "output_dir": summary.get("output_dir", ""),
     }
+    row.update(silhouette_null_columns(best_null))
+    return row
 
 
 def batch_top_layer_head_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
     rows = []
+    null_lookup = permutation_rows_by_layer_head(summary.get("top_layer_head_label_permutation_summary") or [])
     for rank, row in enumerate(summary.get("top_layer_head_scores") or [], start=1):
-        rows.append(
-            {
-                "model_alias": summary.get("model_alias", ""),
-                "backend": summary.get("backend", ""),
-                "model_path": summary.get("model_path", ""),
-                "dataset_source": (summary.get("dataset") or {}).get("dataset_source", ""),
-                "q_capture_stage": summary.get("q_capture_stage", ""),
-                "rank": rank,
-                "layer": row.get("layer", ""),
-                "head": row.get("head", ""),
-                "relative_depth": float(row["layer"]) / max(1, int(summary.get("n_layers", 1)) - 1)
-                if row.get("layer") != ""
-                else "",
-                "silhouette_cosine": row.get("silhouette_cosine", ""),
-            }
-        )
+        out_row = {
+            "model_alias": summary.get("model_alias", ""),
+            "backend": summary.get("backend", ""),
+            "model_path": summary.get("model_path", ""),
+            "dataset_source": (summary.get("dataset") or {}).get("dataset_source", ""),
+            "q_capture_stage": summary.get("q_capture_stage", ""),
+            "rank": rank,
+            "layer": row.get("layer", ""),
+            "head": row.get("head", ""),
+            "relative_depth": float(row["layer"]) / max(1, int(summary.get("n_layers", 1)) - 1)
+            if row.get("layer") != ""
+            else "",
+            "silhouette_cosine": row.get("silhouette_cosine", ""),
+        }
+        null_row = None
+        if row.get("layer") != "" and row.get("head") != "":
+            null_row = null_lookup.get((int(row.get("layer")), int(row.get("head"))))
+        out_row.update(silhouette_null_columns(null_row))
+        rows.append(out_row)
     return rows
 
 
@@ -3451,6 +3565,15 @@ def parse_args() -> argparse.Namespace:
         help="Run N random-label silhouette controls for detailed layer/head probes.",
     )
     parser.add_argument(
+        "--top-layer-head-null-rank-limit",
+        type=int,
+        default=5,
+        help=(
+            "When --label-permutation-n is positive, also compute silhouette null statistics "
+            "for the top K layer/head rows and merge them into batch summaries. Use 0 to disable."
+        ),
+    )
+    parser.add_argument(
         "--label-shuffle-seed",
         type=int,
         default=None,
@@ -3546,6 +3669,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--linear-probe-permutation-n must be >= 0")
     if args.label_permutation_n < 0:
         parser.error("--label-permutation-n must be >= 0")
+    if args.top_layer_head_null_rank_limit < 0:
+        parser.error("--top-layer-head-null-rank-limit must be >= 0")
     if args.detail_text_index is not None and args.detail_text_index < 0:
         parser.error("--detail-text-index must be >= 0")
     if args.plot_sample_limit < 0:

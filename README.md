@@ -20,14 +20,14 @@ and head-to-head RSA/CKA.
 
 ## Current Hypothesis
 
-Early results suggest that transformer layers may contain a **model-family
-dependent stance phase** where question or discourse stance becomes sharply
-organized. The phase is not necessarily located at the same relative depth in
-every architecture:
+Early results suggest that some transformer heads or local head bands may expose
+**stance-sensitive Q-space geometry** under this probe. The location and
+localization of that geometry appear sensitive to model family, tuning state,
+task framing, token pooling, and pre/post-RoPE capture stage:
 
 - **stance formation**: subjective, objective, positive, negative, or factual
   framing becomes separable in Q-space;
-- **query routing**: specific heads appear to define attractor-like routing
+- **query routing**: local head bands can define attractor-like routing
   directions for what the next attention operation will seek;
 - **discourse framing**: token-level Q-flow often looks less like a random walk
   and more like a structured path from initialization into local exploration and
@@ -36,14 +36,15 @@ every architecture:
 The current working hypothesis is:
 
 ```text
-instruction-tuned decoders can develop stance-separating Q-space heads,
-but the layer where that phase appears shifts by model family and may be
-concentrated in one head or distributed across weaker heads.
+decoder-only transformers can show stance-separating Q-space bands,
+but the measured band may move or diffuse with architecture, instruction
+tuning, prompt framing, token readout, and RoPE capture stage.
 ```
 
 This is still exploratory. The current evidence is geometric and predictive,
-not causal. Post-RoPE Q capture is now supported for MLX RoPE models; causal
-ablation remains a planned follow-up.
+not causal. Specific-head identities should be treated as candidate readouts of
+a local band, not as stable mechanistic units yet. Post-RoPE Q capture is now
+supported for MLX RoPE models; causal ablation remains a planned follow-up.
 
 ## Research Notes
 
@@ -54,6 +55,9 @@ ablation remains a planned follow-up.
 - [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
   an initial Mistral-IT check where stance separation survives after RoPE but
   becomes weaker, broader, and partly later than the sharper pre-RoPE surface.
+- [Related-work survey](docs/research_notes/related_work_survey.md):
+  a short positioning note around layer probing, head specialization,
+  fine-tuning representation geometry, and RoPE.
 - [Base vs instruction-tuned SUBJ scan](docs/research_notes/base_vs_instruct_subj.md):
   Mistral appears stable, Llama 3 migrates deeper, and Gemma 2 2B flattens or
   diffuses its single-head Q-space stance axis after instruction tuning.
@@ -120,6 +124,12 @@ The current representative scan used:
 - backend: MLX
 - projection: PCA
 - target depth: `round(0.35 * (n_layers - 1)) = layer 11`
+
+`--target-layer-fraction 0.35` is a convenience anchor for comparable first-look
+plots near the early/middle depth. It is not used as evidence for the final
+claim by itself: the reported best rows come from the full layer x head
+silhouette scan, and `--detail-best-layer-head` adds that discovered row to the
+detailed diagnostics.
 
 Summary:
 
@@ -502,6 +512,7 @@ Optional outputs:
 
 ```text
 label_permutation_summary.csv
+top_layer_head_label_permutation_summary.csv
 linear_probe_summary.csv
 projection_diagnostics.csv
 highd_token_flow_metrics_layer_L_head_H.csv
@@ -520,6 +531,10 @@ query_flow_3d_layer_L_head_H_all.png
   checkpoints;
 - compare pre-RoPE and post-RoPE Q capture on the strongest 4bit heads before
   treating the dense run as a final architecture check;
+- compare Q-space against K-space and V-space scans to determine whether weak
+  Gemma localization is Q-specific or representation-wide;
+- add a two-class silhouette ceiling sanity check so SUBJ scores can be
+  interpreted against an empirical upper bound;
 - test whether Gemma's weaker single-head signal becomes stronger in 9B or
   appears as a multi-head / multi-layer distributed code;
 - add causal ablation of candidate heads and measure downstream degradation.
@@ -527,7 +542,12 @@ query_flow_3d_layer_L_head_H_all.png
 ## Caveats
 
 - The current strongest evidence is geometric and predictive, not causal.
+- Prompted SST-2 is confounded with prompt following and instruction-format
+  competence; it should not yet be read as generic sentiment representation.
 - Linear probes can be over-optimistic when sample counts are small.
 - PCA/UMAP are visualizations; silhouette is computed in the original Q-space.
+- Random-label silhouette null statistics should accompany final headline
+  tables. `batch_model_summary.csv` and `batch_top_layer_heads.csv` include
+  these columns when `--label-permutation-n` is positive.
 - Flow-field curl/divergence summaries are exploratory 2D projection summaries,
   not physical quantities in the original high-dimensional space.

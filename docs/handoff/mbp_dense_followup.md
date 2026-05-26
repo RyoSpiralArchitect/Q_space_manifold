@@ -18,6 +18,8 @@ Read these first:
 - docs/research_notes/n1000_3d_matrix.md
 - docs/research_notes/base_vs_instruct_subj.md
 - docs/research_notes/sst2_base_vs_prompted.md
+- docs/research_notes/pre_post_rope_subj_pilot.md
+- docs/research_notes/related_work_survey.md
 
 The latest completed run is the n=1000/class 3D matrix over Mistral, Llama 3,
 and Gemma 2 2B base/instruct 4bit checkpoints. Post-RoPE Q capture has now been
@@ -115,7 +117,7 @@ Keep these flags:
 --high-d-flow-metrics
 --projection-diagnostics
 --probe-linear
---linear-probe-permutation-n 0
+--linear-probe-permutation-n 50
 --head-similarity
 --drop-special-tokens
 --flow-start-token-index 1
@@ -163,7 +165,7 @@ SUBJ template:
   --high-d-flow-metrics \
   --projection-diagnostics \
   --probe-linear \
-  --linear-probe-permutation-n 0 \
+  --linear-probe-permutation-n 50 \
   --head-similarity \
   --drop-special-tokens \
   --flow-start-token-index 1 \
@@ -190,7 +192,7 @@ Prompted SST-2 template:
   --high-d-flow-metrics \
   --projection-diagnostics \
   --probe-linear \
-  --linear-probe-permutation-n 0 \
+  --linear-probe-permutation-n 50 \
   --head-similarity \
   --drop-special-tokens \
   --flow-start-token-index 1 \

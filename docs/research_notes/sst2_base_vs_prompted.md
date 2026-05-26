@@ -183,6 +183,10 @@ cue for every sample. But its Q vector is allowed to condition on the preceding
 review, so it can become a query for the evidence needed to complete the
 sentiment field.
 
+This remains confounded with prompt-following and instruction-format competence.
+The prompted result should be read as a task-framed classification stance, not
+as a clean measurement of generic sentiment representation.
+
 This suggests a sharper distinction:
 
 ```text
@@ -202,6 +206,9 @@ text* than to the latent topic or valence of the text in isolation.
 - Prompted `pool_last_k=1` may be especially sensitive to the final task cue
   token. This is useful, but it should be interpreted as "classification stance"
   rather than generic sentence meaning.
+- Instruction-tuned models may benefit from the familiar prompt format itself;
+  template sweeps are needed before attributing the full effect to sentiment
+  geometry.
 - Prompt wording is now an experimental factor. Variants such as
   `Question: Is this review positive or negative? Answer:` should be tested.
 - The Gemma 2 2B prompted result remains weak; larger Gemma checkpoints may

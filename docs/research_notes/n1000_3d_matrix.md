@@ -34,11 +34,15 @@ left under `/tmp` and are not tracked in the repository.
 - token handling: `--drop-special-tokens`, `--flow-start-token-index 1`
 - controls: label permutation, high-dimensional flow metrics, projection
   diagnostics, linear probe, and head similarity
-- large-run speed knob: `--linear-probe-permutation-n 0`
+- large-run speed knob used in the first pass: `--linear-probe-permutation-n 0`
 
 `--plot-sample-limit 200` only sparsifies all-sample trajectory and token-flow
 plots. Silhouette scores, probes, CSV metrics, and summaries still use the full
 captured sample.
+
+For claim-facing reruns, use at least `--linear-probe-permutation-n 50` and keep
+`--label-permutation-n` positive so the headline silhouette rows carry
+random-label null statistics.
 
 ## SUBJ Base-vs-Instruct
 
@@ -75,10 +79,12 @@ the earlier observation that Llama 3's strongest SUBJ stance geometry appears
 later after instruction tuning.
 
 **Gemma 2 2B is the sharp contrast case.** The base model has a late usable
-single-head axis at L21/H4. The instruction-tuned model collapses to a weak
-early maximum at L1/H0, with all top scores near `0.02-0.03`. This supports the
-more careful reading that Gemma 2 2B-it is not "signal-free"; rather, the signal
-is not cleanly localized in one head under this probe.
+single-head axis at L21/H4. The instruction-tuned model shows a weak early
+maximum at L1/H0, with top rows tightly clustered near zero. The N=1000 top five
+are L1/H0 `0.0345`, L5/H3 `0.0320`, L12/H1 `0.0295`, L3/H1 `0.0269`, and L5/H2
+`0.0269`. Because these values are close, the apparent best-head jump from the
+earlier N=100 run should be read as rank instability inside a flat/diffuse
+surface, not as evidence that the model moved a strong signal to a new head.
 
 ## Prompted SST-2 Base-vs-Instruct
 
@@ -116,11 +122,13 @@ Best layer/head by high-dimensional cosine silhouette:
 
 Prompted SST-2 is not as clean as SUBJ, but it is structured rather than flat.
 
-**Instruction tuning amplifies explicit sentiment stance in Mistral and Llama
-3.** With `pool_last_k=1`, Mistral-7B-Instruct rises to L23/H30 at `0.1726`,
-while Llama-3-8B-Instruct rises to L18/H28 at `0.2246`. These are substantially
-stronger than the matching base checkpoints and much stronger than Gemma 2
-2B-it.
+**Instruction tuning is associated with stronger prompted sentiment stance in
+Mistral and Llama 3.** With `pool_last_k=1`, Mistral-7B-Instruct rises to
+L23/H30 at `0.1726`, while Llama-3-8B-Instruct rises to L18/H28 at `0.2246`.
+These are substantially stronger than the matching base checkpoints and much
+stronger than Gemma 2 2B-it. This is confounded with prompt-following and
+instruction-format competence, because the template explicitly creates a
+`Sentiment:` query position.
 
 **Pooling changes the readout position.** `pool_last_k=1` emphasizes the final
 task cue position in `Review: ... Sentiment:`. Pooling over `3` or `5` tokens
@@ -155,10 +163,11 @@ Prompted SST-2:
   Gemma 2 2B-it remains the weak/localization-negative contrast
 ```
 
-This makes the probe look less like a projection artifact. A pure artifact
-would be more likely to collapse all models and tasks into similar-looking
-peaks. Instead, the peak location and strength depend on family, tuning state,
-task framing, and token pooling.
+The peak location and strength vary with family, tuning state, task framing, and
+token pooling. This is useful structure, but not by itself a proof against all
+artifacts. The stronger sanity checks are the high-dimensional metric, random
+label nulls, probe controls, and the separate pre/post-RoPE observation that the
+signal can survive rotary position phase while reorganizing.
 
 ## Reproduction Commands
 
@@ -178,7 +187,7 @@ SUBJ:
   --high-d-flow-metrics \
   --projection-diagnostics \
   --probe-linear \
-  --linear-probe-permutation-n 0 \
+  --linear-probe-permutation-n 50 \
   --head-similarity \
   --drop-special-tokens \
   --flow-start-token-index 1 \
@@ -205,7 +214,7 @@ Prompted SST-2:
   --high-d-flow-metrics \
   --projection-diagnostics \
   --probe-linear \
-  --linear-probe-permutation-n 0 \
+  --linear-probe-permutation-n 50 \
   --head-similarity \
   --drop-special-tokens \
   --flow-start-token-index 1 \
@@ -249,7 +258,7 @@ The dense run should reuse the same analysis flags, including:
 --detail-best-layer-head
 --label-permutation-n 200
 --probe-linear
---linear-probe-permutation-n 0
+--linear-probe-permutation-n 50
 --head-similarity
 --plot-3d
 --plot-sample-limit 200
@@ -274,8 +283,14 @@ pooling identical to this run.
   the 3D projection.
 - 3D plots reduce visual overplotting, but they do not change the metric.
 - Prompted SST-2 measures a classification stance induced by a task cue, not
-  generic review semantics.
+  generic review semantics; prompt-following competence is a live confound.
 - `pool_last_k` changes the token position being measured; it is an
   experimental factor, not just a smoothing trick.
+- Specific head IDs are less stable than local bands. Treat top-head changes
+  across N=100 and N=1000 as a reason to prefer band-level claims unless a head
+  survives across sample size, pooling, capture stage, and task framing.
+- SUBJ is a two-class silhouette measurement. A future sanity check should
+  report an empirical ceiling or easy-baseline bound before interpreting score
+  magnitudes too literally.
 - Dense follow-up is required before claiming the pattern is independent of
   quantization.
