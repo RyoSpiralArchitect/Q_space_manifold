@@ -18,9 +18,15 @@ Raw compact tables are in:
 - `examples/n1000_3d_matrix/subj_n1000_3d_batch_model_summary.csv`
 - `examples/n1000_3d_matrix/sst2_prompted_n1000_3d_pool_last_k_sweep_summary.csv`
 - `examples/n1000_3d_matrix/sst2_prompted_n1000_3d_pool_last_k_sweep_manifest.json`
+- `examples/n1000_3d_matrix/subj_n1000_3d_post_rope_headline_summary.csv`
+- `examples/n1000_3d_matrix/sst2_prompted_n1000_3d_post_rope_pool_last_k_sweep_summary.csv`
+- `examples/n1000_3d_matrix/sst2_prompted_n1000_3d_post_rope_pool_last_k_sweep_manifest.json`
+- `examples/n1000_3d_matrix/n1000_3d_pre_post_headline_comparison.csv`
 
 Large full outputs, including per-model 3D plots and `q_space_vectors.npz`, were
-left under `/tmp` and are not tracked in the repository.
+left under `/tmp` or `~/q_space_runs` and are not tracked in the repository.
+The SUBJ post-RoPE full `/tmp` artifact was not retained, so its tracked table
+is a headline summary reconstructed from the terminal run summary.
 
 ## Common Settings
 
@@ -169,6 +175,84 @@ artifacts. The stronger sanity checks are the high-dimensional metric, random
 label nulls, probe controls, and the separate pre/post-RoPE observation that the
 signal can survive rotary position phase while reorganizing.
 
+## Post-RoPE 4bit Rerun
+
+Before moving to dense checkpoints, the same six 4bit configurations were rerun
+with:
+
+```text
+--q-capture-stage post-rope
+```
+
+The result is no longer just the small Mistral pilot: across both SUBJ and
+prompted SST-2, the main signal survives after RoPE, usually with lower
+silhouette and sometimes with a shifted layer/head readout.
+
+![N=1000 pre/post-RoPE headline comparison](../../assets/n1000_3d_pre_post_headline_comparison.png)
+
+### SUBJ Post-RoPE
+
+| model | post-RoPE best layer/head | relative depth | silhouette |
+| --- | ---: | ---: | ---: |
+| Mistral-7B base | L10/H6 | 0.323 | 0.2245 |
+| Mistral-7B instruct | L10/H6 | 0.323 | 0.2102 |
+| Llama-3-8B base | L5/H1 | 0.161 | 0.1695 |
+| Llama-3-8B instruct | L20/H31 | 0.645 | 0.2010 |
+| Gemma-2-2B base | L15/H0 | 0.600 | 0.1528 |
+| Gemma-2-2B-it | L12/H1 | 0.480 | 0.0286 |
+
+The important point is not exact head identity. The band-level story survives:
+
+- Mistral remains an early/mid stance band, with base `L10/H6` essentially
+  unchanged and instruct moving to the same local band.
+- Llama 3 instruct preserves the late `L20/H31` readout after RoPE.
+- Gemma 2 2B base remains nonzero but weaker, while Gemma 2 2B-it remains
+  weakly localized.
+
+### Prompted SST-2 Post-RoPE
+
+Strongest row per model across `pool_last_k=1,3,5`:
+
+| model | strongest post-RoPE row | silhouette | pre-RoPE strongest |
+| --- | ---: | ---: | ---: |
+| Mistral-7B base | k=1 L28/H25 | 0.0676 | k=5 L10/H21, 0.0978 |
+| Mistral-7B instruct | k=1 L28/H25 | 0.1514 | k=1 L23/H30, 0.1726 |
+| Llama-3-8B base | k=1 L20/H24 | 0.1119 | k=1 L20/H24, 0.1205 |
+| Llama-3-8B instruct | k=1 L18/H28 | 0.1980 | k=1 L18/H28, 0.2246 |
+| Gemma-2-2B base | k=5 L14/H7 | 0.0382 | k=5 L12/H4, 0.0587 |
+| Gemma-2-2B-it | k=5 L12/H3 | 0.0255 | k=5 L12/H3, 0.0266 |
+
+All post-RoPE prompted SST-2 headline rows beat their random-label silhouette
+nulls at the 200-permutation p-value floor (`p = 1 / 201`). The z-scores are
+large because `N=2000` makes the null standard deviations very small, so p-value
+and raw silhouette should be treated as the primary quantities.
+
+Representative post-RoPE prompted SST-2 plots:
+
+![Mistral-IT post-RoPE prompted SST-2 heatmap](../../assets/sst2_prompted_post_rope_mistral_it_layer_head_heatmap.png)
+
+![Mistral-IT post-RoPE prompted SST-2 Q-flow](../../assets/sst2_prompted_post_rope_mistral_it_query_flow_3d_layer_28_head_25.png)
+
+![Llama3-IT post-RoPE prompted SST-2 heatmap](../../assets/sst2_prompted_post_rope_llama3_it_layer_head_heatmap.png)
+
+![Llama3-IT post-RoPE prompted SST-2 Q-flow](../../assets/sst2_prompted_post_rope_llama3_it_query_flow_3d_layer_18_head_28.png)
+
+![Gemma2-2B-it post-RoPE prompted SST-2 heatmap](../../assets/sst2_prompted_post_rope_gemma2_2b_it_layer_head_heatmap.png)
+
+### Pre/Post-RoPE Reading
+
+The compact reading now becomes:
+
+```text
+pre-RoPE:   usually sharper and slightly stronger
+post-RoPE: usually weaker, sometimes shifted, but still structured
+```
+
+This matters for claim hygiene. The current evidence does not say "RoPE is
+irrelevant"; it says the signal is not confined to the pre-RoPE projection
+surface. RoPE changes the readout surface, but it does not erase the family and
+tuning patterns.
+
 ## Reproduction Commands
 
 SUBJ:
@@ -225,22 +309,10 @@ Prompted SST-2:
 
 ## Next Matrix: Dense Same-Family Check
 
-Before the dense run, the next natural move is to compare the strongest 4bit
-heads under post-RoPE Q capture:
-
-```bash
---q-capture-stage post-rope
-```
-
-If the same heads or bands remain separable after rotary position phase is
-applied, the stance-routing interpretation gets stronger. If the peaks move or
-diffuse, then pre-RoPE and post-RoPE should be treated as distinct experimental
-surfaces. The first small Mistral-IT check is recorded in
-[Pre/Post-RoPE SUBJ Pilot](pre_post_rope_subj_pilot.md): the signal survives
-after RoPE, but becomes weaker, broader, and partly later.
-
-After that, repeat this matrix on a larger MacBook Pro with dense checkpoints
-from the same families. That gives a clean 12-cell comparison:
+The 4bit pre/post-RoPE matrix is now strong enough to hand off to dense
+checkpoints. Repeat this matrix on a larger MacBook Pro with dense checkpoints
+from the same families. That gives a clean 12-cell comparison per capture
+stage:
 
 ```text
 3 families x 2 tuning states x 2 task framings

@@ -22,11 +22,11 @@ Read these first:
 - docs/research_notes/related_work_survey.md
 
 The latest completed run is the n=1000/class 3D matrix over Mistral, Llama 3,
-and Gemma 2 2B base/instruct 4bit checkpoints. Post-RoPE Q capture has now been
-implemented with `--q-capture-stage post-rope` for MLX RoPE models. The next
-goal is to compare pre-RoPE vs post-RoPE on the strongest 4bit heads, then
-repeat the same SUBJ and prompted SST-2 matrix on dense same-family checkpoints
-on this MacBook Pro, keeping all analysis flags identical where possible.
+and Gemma 2 2B base/instruct 4bit checkpoints, including both pre-RoPE and
+post-RoPE headline comparisons. Post-RoPE Q capture is implemented with
+`--q-capture-stage post-rope` for MLX RoPE models. The next goal is to repeat
+the same SUBJ and prompted SST-2 matrix on dense same-family checkpoints on this
+MacBook Pro, keeping all analysis flags identical where possible.
 ```
 
 ## Current Repository State
@@ -91,10 +91,33 @@ gemma2_2b_it:   k=5 L12/H3   score 0.0266
 
 Compact tracked tables live in `examples/n1000_3d_matrix/`.
 
+Post-RoPE 4bit follow-up:
+
+```text
+SUBJ post-RoPE strongest rows:
+mistral_base:   L10/H6   score 0.2245
+mistral_it:     L10/H6   score 0.2102
+llama3_base:    L5/H1    score 0.1695
+llama3_it:      L20/H31  score 0.2010
+gemma2_2b_base: L15/H0   score 0.1528
+gemma2_2b_it:   L12/H1   score 0.0286
+
+Prompted SST-2 post-RoPE strongest rows across pool_last_k=1,3,5:
+mistral_base:   k=1 L28/H25  score 0.0676
+mistral_it:     k=1 L28/H25  score 0.1514
+llama3_base:    k=1 L20/H24  score 0.1119
+llama3_it:      k=1 L18/H28  score 0.1980
+gemma2_2b_base: k=5 L14/H7   score 0.0382
+gemma2_2b_it:   k=5 L12/H3   score 0.0255
+```
+
+Compact post-RoPE tracked tables and representative plots are also in
+`examples/n1000_3d_matrix/` and `assets/`.
+
 ## Dense Follow-Up Shape
 
-Before dense, run a small post-RoPE comparison on the strongest 4bit heads. The
-dense follow-up should then be a same-family 12-cell matrix:
+The 4bit pre/post-RoPE matrix is complete enough for dense follow-up. The dense
+follow-up should be a same-family 12-cell matrix per capture stage:
 
 ```text
 3 model families x 2 tuning states x 2 task framings
@@ -205,8 +228,8 @@ Prompted SST-2 template:
 
 Primary comparison:
 
-- Do the strongest 4bit heads survive post-RoPE, or does positional phase
-  smear/relocate the stance geometry?
+- Do dense checkpoints preserve the same pre/post-RoPE survival-and-reorganization
+  pattern seen in 4bit?
 - Does Mistral remain an early/mid stable stance band?
 - Does Llama 3 instruct still migrate deeper and strengthen?
 - Does Gemma 2 2B-it remain flat/diffuse in dense form?

@@ -49,9 +49,10 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
 ## Research Notes
 
 - [N=1000/class 3D base-vs-instruct matrix](docs/research_notes/n1000_3d_matrix.md):
-  the first medium-scale 6-model pass across SUBJ and prompted SST-2. SUBJ
-  preserves the Mistral/Llama/Gemma family split, while prompted SST-2 shows
-  strong instruction-tuned sentiment-query heads in Mistral and Llama 3.
+  the first medium-scale 6-model pass across SUBJ and prompted SST-2, now with
+  pre/post-RoPE headline comparisons. SUBJ preserves the Mistral/Llama/Gemma
+  family split, while prompted SST-2 shows strong instruction-tuned
+  sentiment-query heads in Mistral and Llama 3.
 - [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
   an initial Mistral-IT check where stance separation survives after RoPE but
   becomes weaker, broader, and partly later than the sharper pre-RoPE surface.
@@ -227,6 +228,13 @@ Prompted SST-2 strongest row by model across `pool_last_k=1,3,5`:
 | Llama-3-8B instruct | k=1 L18/H28 | 0.2246 |
 | Gemma-2-2B base | k=5 L12/H4 | 0.0587 |
 | Gemma-2-2B-it | k=5 L12/H3 | 0.0266 |
+
+Post-RoPE reruns keep the main structure while usually reducing the headline
+silhouette. Mistral base keeps `L10/H6` on SUBJ, Llama3-IT keeps its late
+`L20/H31` SUBJ readout and `L18/H28` prompted SST-2 readout, and Gemma2-2B-it
+remains weakly localized.
+
+![N=1000 pre/post-RoPE headline comparison](assets/n1000_3d_pre_post_headline_comparison.png)
 
 This turns the working hypothesis into a 12-cell comparison:
 
