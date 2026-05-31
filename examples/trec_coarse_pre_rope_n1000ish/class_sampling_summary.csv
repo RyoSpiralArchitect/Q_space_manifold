@@ -1,0 +1,7 @@
+class_label,class_name,original_train_count,requested_samples_per_class,selected_count,selection_policy
+0,ABBR,86,1000,86,kept all rows because class count was below cap
+1,ENTY,1250,1000,1000,randomly sampled cap rows with random_state 42
+2,DESC,1162,1000,1000,randomly sampled cap rows with random_state 42
+3,HUM,1223,1000,1000,randomly sampled cap rows with random_state 42
+4,LOC,835,1000,835,kept all rows because class count was below cap
+5,NUM,896,1000,896,kept all rows because class count was below cap

@@ -13,6 +13,7 @@ Compact tracked artifacts:
 
 - `examples/trec_coarse_pre_rope_n1000ish/pool_last_k_sweep_summary.csv`
 - `examples/trec_coarse_pre_rope_n1000ish/best_per_model_summary.csv`
+- `examples/trec_coarse_pre_rope_n1000ish/class_sampling_summary.csv`
 - `examples/trec_coarse_pre_rope_n1000ish/abbr_excluded_original_best_silhouette.csv`
 - `examples/trec_coarse_pre_rope_n1000ish/pool_last_k_sweep_manifest.json`
 
@@ -51,6 +52,37 @@ This matters because the `ABBR` class has only 86 examples, while the largest
 classes are capped at 1000. The headline six-class silhouette should therefore
 be read as a capped-balanced TREC coarse score, not as a strictly balanced
 six-class estimate.
+
+### Sampling Procedure
+
+The script loads the dataset once before entering the batch-model and
+`pool_last_k` loops. Therefore all six models and all three pooling values in
+this command see the same selected `4817` rows.
+
+Selection used the repository's `balanced_or_limited_rows()` helper:
+
+```text
+for each class:
+  shuffle rows with random_state 42
+  take min(--samples-per-class, class_count)
+```
+
+There is no upsampling, class weighting, or replacement sampling. Classes below
+the cap are kept in full; classes above the cap are randomly capped at 1000.
+
+| label id | class | original train count | selected count | policy |
+| ---: | --- | ---: | ---: | --- |
+| 0 | ABBR | 86 | 86 | keep all |
+| 1 | ENTY | 1250 | 1000 | sample 1000 |
+| 2 | DESC | 1162 | 1000 | sample 1000 |
+| 3 | HUM | 1223 | 1000 | sample 1000 |
+| 4 | LOC | 835 | 835 | keep all |
+| 5 | NUM | 896 | 896 | keep all |
+
+The matching post-RoPE command should use the same dataset arguments and seed
+to make the selected rows comparable. For claim-facing reruns, prefer passing
+`--dataset-seed 42` explicitly and checking `dataset_rows.csv` when comparing
+pre/post outputs.
 
 ## Best Rows
 
