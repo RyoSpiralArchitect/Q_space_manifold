@@ -53,6 +53,11 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
   pre/post-RoPE headline comparisons. SUBJ preserves the Mistral/Llama/Gemma
   family split, while prompted SST-2 shows strong instruction-tuned
   sentiment-query heads in Mistral and Llama 3.
+- [TREC question-type pre-RoPE sweep](docs/research_notes/trec_question_type_pre_rope.md):
+  a six-model pass over coarse question categories. TREC shows a weaker
+  six-way manifold silhouette than SUBJ, but answer-type routing is strongly
+  linearly readable from final-token Q vectors. Mistral base/IT recur at the
+  same L17/H26 head, while Gemma 2 2B-it remains weakly localized.
 - [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
   an initial Mistral-IT check where stance separation survives after RoPE but
   becomes weaker, broader, and partly later than the sharper pre-RoPE surface.
@@ -482,6 +487,11 @@ The sweep reuses captured token Q tensors per model and writes:
 pool_last_k_sweep_summary.csv
 pool_last_k_sweep_manifest.json
 ```
+
+For long multi-model sweeps, add `--resume-existing`. Completed
+`pool_last_k/model` directories with `analysis_summary.json` are skipped, and
+the sweep summary is rebuilt incrementally. This is useful when a large run is
+interrupted after one or more model captures have already finished.
 
 To test a task framing rather than the naked sentence, use `--text-template`:
 
