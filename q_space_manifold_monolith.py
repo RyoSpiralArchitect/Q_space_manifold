@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gc
 import json
 import math
 import sys
@@ -116,6 +117,46 @@ class CaptureBundle:
 class TorchProjectionSpec:
     path_template: str
     kind: str
+
+
+def cleanup_runtime_caches(backend: str | None = None) -> None:
+    """Release large model/projection temporaries between long sweep stages."""
+    gc.collect()
+    if backend in (None, "mlx"):
+        try:
+            import mlx.core as mx  # type: ignore
+        except Exception:
+            pass
+        else:
+            try:
+                mx.synchronize()
+            except Exception:
+                pass
+            try:
+                mx.clear_cache()
+            except Exception:
+                pass
+            metal = getattr(mx, "metal", None)
+            if metal is not None:
+                try:
+                    metal.clear_cache()
+                except Exception:
+                    pass
+    if backend in (None, "torch"):
+        try:
+            import torch  # type: ignore
+        except Exception:
+            return
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+        try:
+            if hasattr(torch, "mps"):
+                torch.mps.empty_cache()
+        except Exception:
+            pass
 
 
 @dataclass(frozen=True)
@@ -778,8 +819,11 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
         for handle in handles:
             handle.remove()
 
-    return CaptureBundle(
-        final_q_all=np.stack(final_q_records, axis=0),
+    final_q_all = np.stack(final_q_records, axis=0)
+    final_q_records.clear()
+    current_q_cache.clear()
+    result = CaptureBundle(
+        final_q_all=final_q_all,
         token_q_records=token_q_records,
         token_records=token_records,
         model_info={
@@ -801,6 +845,9 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
             "pool_last_k": args.pool_last_k,
         },
     )
+    del model, tokenizer
+    cleanup_runtime_caches("torch")
+    return result
 
 
 def find_mlx_layers(model: Any) -> list[Any]:
@@ -1007,8 +1054,11 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
         for parent, attr, original in originals:
             setattr(parent, attr, original)
 
-    return CaptureBundle(
-        final_q_all=np.stack(final_q_records, axis=0),
+    final_q_all = np.stack(final_q_records, axis=0)
+    final_q_records.clear()
+    current_q_cache.clear()
+    result = CaptureBundle(
+        final_q_all=final_q_all,
         token_q_records=token_q_records,
         token_records=token_records,
         model_info={
@@ -1030,6 +1080,9 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
             "pool_last_k": args.pool_last_k,
         },
     )
+    del model, tokenizer
+    cleanup_runtime_caches("mlx")
+    return result
 
 
 def pca_2d(np: Any, x: Any) -> Any:
@@ -3395,22 +3448,54 @@ def run_pool_last_k_sweep(
         ]
 
     for spec in run_specs:
+        cleanup_runtime_caches(spec.backend)
         base_args = args_for_model_spec(args, spec, root_dir)
+        missing_pool_values = []
+        for pool_last_k in pool_values:
+            if specs:
+                output_dir = root_dir / f"pool_last_k_{pool_last_k}" / spec.alias
+            else:
+                output_dir = root_dir / f"pool_last_k_{pool_last_k}"
+            summary_path = output_dir / "analysis_summary.json"
+            if getattr(args, "resume_existing", False) and summary_path.exists():
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                row = batch_summary_row(summary)
+                row["pool_last_k"] = pool_last_k
+                all_rows.append(row)
+                write_csv_rows(root_dir / "pool_last_k_sweep_summary.csv", all_rows)
+                print(f"=== pool_last_k sweep resume: skipping existing {output_dir} ===")
+                continue
+            missing_pool_values.append(pool_last_k)
+        if not missing_pool_values:
+            continue
+
         capture_args = argparse.Namespace(**vars(base_args))
-        capture_args.pool_last_k = max(pool_values)
+        capture_args.pool_last_k = max(missing_pool_values)
         print(f"=== pool_last_k sweep capture: {spec.alias} ({spec.backend}) {spec.model_path} ===")
         bundle = collect_bundle(capture_args, dataset)
-        for pool_last_k in pool_values:
-            run_args = argparse.Namespace(**vars(base_args))
-            run_args.pool_last_k = pool_last_k
-            if specs:
-                run_args.output_dir = root_dir / f"pool_last_k_{pool_last_k}" / spec.alias
-            else:
-                run_args.output_dir = root_dir / f"pool_last_k_{pool_last_k}"
-            summary = analyze_bundle(run_args, dataset, bundle_with_pool_last_k(np, bundle, pool_last_k))
-            row = batch_summary_row(summary)
-            row["pool_last_k"] = pool_last_k
-            all_rows.append(row)
+        try:
+            for pool_last_k in missing_pool_values:
+                run_args = argparse.Namespace(**vars(base_args))
+                run_args.pool_last_k = pool_last_k
+                if specs:
+                    run_args.output_dir = root_dir / f"pool_last_k_{pool_last_k}" / spec.alias
+                else:
+                    run_args.output_dir = root_dir / f"pool_last_k_{pool_last_k}"
+                pooled_bundle = bundle_with_pool_last_k(np, bundle, pool_last_k)
+                try:
+                    summary = analyze_bundle(run_args, dataset, pooled_bundle)
+                finally:
+                    del pooled_bundle
+                    cleanup_runtime_caches(spec.backend)
+                row = batch_summary_row(summary)
+                row["pool_last_k"] = pool_last_k
+                all_rows.append(row)
+                write_csv_rows(root_dir / "pool_last_k_sweep_summary.csv", all_rows)
+                del summary, run_args, row
+                cleanup_runtime_caches(spec.backend)
+        finally:
+            del bundle
+            cleanup_runtime_caches(spec.backend)
 
     write_csv_rows(root_dir / "pool_last_k_sweep_summary.csv", all_rows)
     write_json(
@@ -3499,6 +3584,11 @@ def parse_args() -> argparse.Namespace:
         "--pool-last-k-sweep",
         default="",
         help="Comma-separated pool_last_k values, e.g. 1,3,5. Reuses captured token Q per model.",
+    )
+    parser.add_argument(
+        "--resume-existing",
+        action="store_true",
+        help="For sweep runs, skip pool/model output directories that already have analysis_summary.json.",
     )
     parser.add_argument("--n-neighbors", type=int, default=5)
     parser.add_argument("--min-dist", type=float, default=0.3)
