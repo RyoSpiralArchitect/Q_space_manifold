@@ -185,8 +185,9 @@ with:
 ```
 
 The result is no longer just the small Mistral pilot: across both SUBJ and
-prompted SST-2, the main signal survives after RoPE, usually with lower
-silhouette and sometimes with a shifted layer/head readout.
+prompted SST-2, the main signal survives after RoPE. Some headline rows are
+lower or shifted after RoPE, but those deltas should be treated as single-run
+variation until reproduced across seeds or repeated samples.
 
 ![N=1000 pre/post-RoPE headline comparison](../../assets/n1000_3d_pre_post_headline_comparison.png)
 
@@ -244,14 +245,25 @@ Representative post-RoPE prompted SST-2 plots:
 The compact reading now becomes:
 
 ```text
-pre-RoPE:   usually sharper and slightly stronger
-post-RoPE: usually weaker, sometimes shifted, but still structured
+headline task signal: usually present both pre-RoPE and post-RoPE
+small score/head shifts: single-run variation until reproduced
 ```
 
-This matters for claim hygiene. The current evidence does not say "RoPE is
-irrelevant"; it says the signal is not confined to the pre-RoPE projection
-surface. RoPE changes the readout surface, but it does not erase the family and
-tuning patterns.
+This matters for claim hygiene. The earlier Mistral-IT N=100 pilot suggested a
+"weaker, broader, later" post-RoPE readout, but that phrase should not be used
+as the cross-family headline. The N=1000 matrix is better summarized as:
+
+```text
+Q-space task signals are largely preserved across the pre/post-RoPE capture
+surface at headline level, while exact score differences and head identities
+need reproduction before interpretation.
+```
+
+In particular, notes such as "Gemma appears more RoPE-sensitive", "Llama 3
+Instruct looks stronger pre-RoPE", or "Mistral looks more robust" are useful
+prompts for future experiments, not established trends here. The observed
+differences are often on the order of a few hundredths of silhouette, sometimes
+near the noise floor of the task, and the matrix still uses one sample seed.
 
 ## Reproduction Commands
 

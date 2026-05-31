@@ -59,8 +59,9 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
   linearly readable from final-token Q vectors. Mistral base/IT recur at the
   same L17/H26 head, while Gemma 2 2B-it remains weakly localized.
 - [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
-  an initial Mistral-IT check where stance separation survives after RoPE but
-  becomes weaker, broader, and partly later than the sharper pre-RoPE surface.
+  an initial Mistral-IT check where stance separation survives after RoPE. Its
+  "weaker, broader, later" wording is now treated as pilot-specific rather than
+  a cross-family headline.
 - [Related-work survey](docs/research_notes/related_work_survey.md):
   a short positioning note around layer probing, head specialization,
   fine-tuning representation geometry, and RoPE.
@@ -234,8 +235,9 @@ Prompted SST-2 strongest row by model across `pool_last_k=1,3,5`:
 | Gemma-2-2B base | k=5 L12/H4 | 0.0587 |
 | Gemma-2-2B-it | k=5 L12/H3 | 0.0266 |
 
-Post-RoPE reruns keep the main structure while usually reducing the headline
-silhouette. Mistral base keeps `L10/H6` on SUBJ, Llama3-IT keeps its late
+Post-RoPE reruns keep the main structure at headline level, but small
+pre/post-RoPE differences should be treated as single-run variation until
+reproduced. Mistral base keeps `L10/H6` on SUBJ, Llama3-IT keeps its late
 `L20/H31` SUBJ readout and `L18/H28` prompted SST-2 readout, and Gemma2-2B-it
 remains weakly localized.
 
