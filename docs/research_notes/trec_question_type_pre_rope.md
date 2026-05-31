@@ -13,6 +13,8 @@ Compact tracked artifacts:
 
 - `examples/trec_coarse_pre_rope_n1000ish/pool_last_k_sweep_summary.csv`
 - `examples/trec_coarse_pre_rope_n1000ish/best_per_model_summary.csv`
+- `examples/trec_coarse_pre_rope_n1000ish/class_sampling_summary.csv`
+- `examples/trec_coarse_pre_rope_n1000ish/abbr_excluded_original_best_silhouette.csv`
 - `examples/trec_coarse_pre_rope_n1000ish/pool_last_k_sweep_manifest.json`
 
 Large full outputs, including `q_space_vectors.npz`, were left under
@@ -46,6 +48,42 @@ sample count is:
 ABBR 86 + ENTY 1000 + DESC 1000 + HUM 1000 + LOC 835 + NUM 896 = 4817
 ```
 
+This matters because the `ABBR` class has only 86 examples, while the largest
+classes are capped at 1000. The headline six-class silhouette should therefore
+be read as a capped-balanced TREC coarse score, not as a strictly balanced
+six-class estimate.
+
+### Sampling Procedure
+
+The script loads the dataset once before entering the batch-model and
+`pool_last_k` loops. Therefore all six models and all three pooling values in
+this command see the same selected `4817` rows.
+
+Selection used the repository's `balanced_or_limited_rows()` helper:
+
+```text
+for each class:
+  shuffle rows with random_state 42
+  take min(--samples-per-class, class_count)
+```
+
+There is no upsampling, class weighting, or replacement sampling. Classes below
+the cap are kept in full; classes above the cap are randomly capped at 1000.
+
+| label id | class | original train count | selected count | policy |
+| ---: | --- | ---: | ---: | --- |
+| 0 | ABBR | 86 | 86 | keep all |
+| 1 | ENTY | 1250 | 1000 | sample 1000 |
+| 2 | DESC | 1162 | 1000 | sample 1000 |
+| 3 | HUM | 1223 | 1000 | sample 1000 |
+| 4 | LOC | 835 | 835 | keep all |
+| 5 | NUM | 896 | 896 | keep all |
+
+The matching post-RoPE command should use the same dataset arguments and seed
+to make the selected rows comparable. For claim-facing reruns, prefer passing
+`--dataset-seed 42` explicitly and checking `dataset_rows.csv` when comparing
+pre/post outputs.
+
 ## Best Rows
 
 Best layer/head by high-dimensional cosine silhouette across the
@@ -64,6 +102,28 @@ All listed best rows beat their 200-permutation silhouette null at the p-value
 floor (`p = 1 / 201`), but the raw silhouette values remain modest. This is a
 useful distinction: TREC question type appears linearly readable from Q-space,
 but not necessarily as a clean six-cluster manifold.
+
+## ABBR-Imbalance Check
+
+Because `ABBR` contributes only 86 rows, a small follow-up recomputed
+silhouette after dropping `ABBR` and keeping `ENTY`, `DESC`, `HUM`, `LOC`, and
+`NUM` (`4731` rows total). This is not a full five-class layer/head rescan; it
+reuses each original six-class best layer/head and asks whether the headline
+score collapses when the smallest class is removed.
+
+| model | pool_last_k | original six-class best | six-class sil | five-class sil at same head |
+| --- | ---: | ---: | ---: | ---: |
+| Mistral-7B base | 1 | L17/H26 | 0.1019 | 0.1132 |
+| Mistral-7B instruct | 1 | L17/H26 | 0.0795 | 0.1049 |
+| Llama-3-8B base | 1 | L17/H24 | 0.0595 | 0.0670 |
+| Llama-3-8B instruct | 1 | L18/H16 | 0.0475 | 0.0495 |
+| Gemma-2-2B base | 1 | L17/H3 | 0.0816 | 0.0901 |
+| Gemma-2-2B-it | 3 | L6/H6 | 0.0003 | 0.0162 |
+
+The five-class scores do not erase the headline readout, and in most cases they
+increase slightly. The safer interpretation is that `ABBR` imbalance is a real
+caveat for comparing absolute six-class silhouette magnitudes, but the main
+Mistral/Llama/Gemma contrast is not created solely by the tiny `ABBR` class.
 
 ## Pooling Pattern
 

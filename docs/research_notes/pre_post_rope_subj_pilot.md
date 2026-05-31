@@ -5,6 +5,17 @@ Date: 2026-05-25
 This note records the first targeted pre/post-RoPE comparison for the Mistral
 instruction-tuned SUBJ probe.
 
+## Claim Hygiene Update
+
+Update added 2026-06-01: the compact headline below,
+`pre-RoPE: stronger, sharper, earlier` and `post-RoPE: weaker, broader, later`,
+should be read as a description of this Mistral-IT N=100 pilot only. It does
+not generalize cleanly to the later N=1000 cross-family matrix. The larger
+matrix supports a weaker and safer claim: Q-space task signals can survive
+RoPE, but exact layer/head shifts and small score deltas are single-run
+variation until reproduced across seeds, samples, and matching full
+pre/post-RoPE sweeps.
+
 The goal is to separate two experimental surfaces:
 
 ```text
