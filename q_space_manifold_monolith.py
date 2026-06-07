@@ -457,6 +457,21 @@ def load_dataset(path: Path | None) -> TextDataset:
     return load_json_dataset(path)
 
 
+def portable_output_path(path_value: Any) -> str:
+    if path_value is None:
+        return ""
+    text = str(path_value)
+    if not text or text.startswith("~/"):
+        return text
+    path = Path(text)
+    if not path.is_absolute():
+        return text
+    try:
+        return f"~/{path.relative_to(Path.home()).as_posix()}"
+    except ValueError:
+        return text
+
+
 def write_csv_rows(path: Path, rows: Sequence[dict[str, Any]], fieldnames: Sequence[str] | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows and fieldnames is None:
@@ -3214,7 +3229,7 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
         write_csv_rows(output_dir / "projection_diagnostics.csv", projection_diagnostic_rows)
 
     summary = {
-        "output_dir": str(output_dir),
+        "output_dir": portable_output_path(output_dir),
         "model_alias": getattr(args, "model_alias", ""),
         "model_path": args.model_path,
         "backend": args.backend,
@@ -3311,7 +3326,7 @@ def batch_summary_row(summary: dict[str, Any]) -> dict[str, Any]:
         "best_head": best.get("head", ""),
         "best_layer_relative_depth": summary.get("best_layer_head_relative_depth", ""),
         "best_layer_head_silhouette_cosine": best.get("silhouette_cosine", ""),
-        "output_dir": summary.get("output_dir", ""),
+        "output_dir": portable_output_path(summary.get("output_dir", "")),
     }
     row.update(silhouette_null_columns(best_null))
     return row
