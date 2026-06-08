@@ -817,9 +817,12 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
         with torch.no_grad():
             for text in progress(dataset.texts, "extracting Q/tokens"):
                 current_q_cache.clear()
-                inputs = tokenizer(text, return_tensors="pt").to(device)
-                input_ids = inputs["input_ids"][0].detach().cpu().tolist()
+                encoded = tokenizer(text)
+                input_ids = truncate_token_ids(encoded["input_ids"], args)
                 tokens = tokenizer.convert_ids_to_tokens(input_ids)
+                inputs = {
+                    "input_ids": torch.tensor([input_ids], dtype=torch.long, device=device),
+                }
                 model(**inputs)
                 missing = [idx for idx in range(n_layers) if idx not in current_q_cache]
                 if missing:
@@ -827,9 +830,10 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
                 q_by_layer = np.stack([current_q_cache[idx] for idx in range(n_layers)], axis=0)
                 k = min(args.pool_last_k, q_by_layer.shape[2])
                 final_q = q_by_layer[:, :, -k:, :].mean(axis=2)
+                compact_q, compact_tokens = compact_token_q_record(np, q_by_layer, tokens, args)
                 final_q_records.append(final_q)
-                token_q_records.append(q_by_layer)
-                token_records.append([str(tok) for tok in tokens])
+                token_q_records.append(compact_q)
+                token_records.append(compact_tokens)
     finally:
         for handle in handles:
             handle.remove()
@@ -983,6 +987,44 @@ def mlx_tokens(tokenizer: Any, ids: Sequence[int]) -> list[str]:
     return [str(token_id) for token_id in ids]
 
 
+def truncate_token_ids(ids: Sequence[int], args: argparse.Namespace) -> list[int]:
+    token_ids = [int(token_id) for token_id in ids]
+    limit = int(getattr(args, "max_token_length", 0) or 0)
+    if limit > 0 and len(token_ids) > limit:
+        if args.token_truncation_side == "tail":
+            token_ids = token_ids[-limit:]
+        else:
+            token_ids = token_ids[:limit]
+    if not token_ids:
+        raise RuntimeError("tokenization produced an empty input")
+    return token_ids
+
+
+def stored_token_indices(seq_len: int, args: argparse.Namespace) -> list[int]:
+    limit = int(getattr(args, "max_stored_tokens", 0) or 0)
+    if limit <= 0 or seq_len <= limit:
+        return list(range(seq_len))
+    if args.stored_token_selection == "tail":
+        return list(range(seq_len - limit, seq_len))
+    return list(range(limit))
+
+
+def token_q_storage_dtype(args: argparse.Namespace) -> str:
+    dtype = str(getattr(args, "token_q_storage_dtype", "float32"))
+    if dtype not in {"float16", "float32"}:
+        raise RuntimeError(f"unsupported token Q storage dtype: {dtype}")
+    return dtype
+
+
+def compact_token_q_record(np: Any, q_by_layer: Any, tokens: Sequence[str], args: argparse.Namespace) -> tuple[Any, list[str]]:
+    indices = stored_token_indices(int(q_by_layer.shape[2]), args)
+    compact = q_by_layer[:, :, indices, :]
+    dtype = token_q_storage_dtype(args)
+    if dtype != str(compact.dtype):
+        compact = compact.astype(dtype)
+    return compact, [str(tokens[idx]) for idx in indices]
+
+
 def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureBundle:
     np = load_numpy()
     try:
@@ -1029,7 +1071,7 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
     try:
         for text in progress(dataset.texts, "extracting MLX Q/tokens"):
             current_q_cache.clear()
-            ids = encode_mlx(tokenizer, text)
+            ids = truncate_token_ids(encode_mlx(tokenizer, text), args)
             tokens = mlx_tokens(tokenizer, ids)
             inputs = mx.array([ids])
             output = model(inputs)
@@ -1062,9 +1104,10 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
             q_by_layer_np = np.stack(q_by_layer, axis=0)
             k = min(args.pool_last_k, q_by_layer_np.shape[2])
             final_q = q_by_layer_np[:, :, -k:, :].mean(axis=2)
+            compact_q, compact_tokens = compact_token_q_record(np, q_by_layer_np, tokens, args)
             final_q_records.append(final_q)
-            token_q_records.append(q_by_layer_np)
-            token_records.append(tokens)
+            token_q_records.append(compact_q)
+            token_records.append(compact_tokens)
     finally:
         for parent, attr, original in originals:
             setattr(parent, attr, original)
@@ -2911,6 +2954,11 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
             "metric": args.metric,
             "flow_start_token_index": args.flow_start_token_index,
             "drop_special_tokens": args.drop_special_tokens,
+            "max_token_length": args.max_token_length,
+            "token_truncation_side": args.token_truncation_side,
+            "max_stored_tokens": args.max_stored_tokens,
+            "stored_token_selection": args.stored_token_selection,
+            "token_q_storage_dtype": args.token_q_storage_dtype,
             "color_flow_by": args.color_flow_by,
             "plot_3d": args.plot_3d,
             "plot_sample_limit": args.plot_sample_limit,
@@ -3254,6 +3302,11 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
         "target_head": args.target_head,
         "flow_start_token_index": args.flow_start_token_index,
         "drop_special_tokens": args.drop_special_tokens,
+        "max_token_length": args.max_token_length,
+        "token_truncation_side": args.token_truncation_side,
+        "max_stored_tokens": args.max_stored_tokens,
+        "stored_token_selection": args.stored_token_selection,
+        "token_q_storage_dtype": args.token_q_storage_dtype,
         "color_flow_by": args.color_flow_by,
         "label_permutation_n": args.label_permutation_n,
         "top_layer_head_null_rank_limit": args.top_layer_head_null_rank_limit,
@@ -3445,6 +3498,14 @@ def run_pool_last_k_sweep(
     pool_values: Sequence[int],
 ) -> None:
     np = load_numpy()
+    if args.max_stored_tokens > 0:
+        if args.stored_token_selection != "tail":
+            raise SystemExit("--pool-last-k-sweep with --max-stored-tokens requires --stored-token-selection tail")
+        if args.max_stored_tokens < max(pool_values):
+            raise SystemExit(
+                "--pool-last-k-sweep requires --max-stored-tokens to be at least the largest pool value "
+                f"({max(pool_values)}), got {args.max_stored_tokens}"
+            )
     root_dir = args.output_dir
     root_dir.mkdir(parents=True, exist_ok=True)
     all_rows = []
@@ -3725,6 +3786,39 @@ def parse_args() -> argparse.Namespace:
         help="Drop common tokenizer special tokens such as <s>, </s>, and <|endoftext|> from token Q-flow.",
     )
     parser.add_argument(
+        "--max-token-length",
+        type=int,
+        default=0,
+        help="Truncate model inputs to at most N tokens before Q capture. 0 keeps the tokenizer output unchanged.",
+    )
+    parser.add_argument(
+        "--token-truncation-side",
+        choices=["head", "tail"],
+        default="head",
+        help="When --max-token-length is set, keep the head or tail side of the tokenized input.",
+    )
+    parser.add_argument(
+        "--max-stored-tokens",
+        type=int,
+        default=0,
+        help=(
+            "Store at most N token positions per sample for token-flow analysis and pool-last-k sweeps. "
+            "0 stores all captured token Qs. Use with --stored-token-selection tail for memory-heavy code runs."
+        ),
+    )
+    parser.add_argument(
+        "--stored-token-selection",
+        choices=["head", "tail"],
+        default="tail",
+        help="Which token positions to keep when --max-stored-tokens is positive.",
+    )
+    parser.add_argument(
+        "--token-q-storage-dtype",
+        choices=["float16", "float32"],
+        default="float32",
+        help="Storage dtype for retained token Q records. final_q_all remains float32.",
+    )
+    parser.add_argument(
         "--detail-best-layer-head",
         action="store_true",
         help="Also run detailed flow/projection/probe outputs for the best layer/head over the full atlas.",
@@ -3782,6 +3876,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--plot-sample-limit must be >= 0")
     if args.flow_start_token_index < 0:
         parser.error("--flow-start-token-index must be >= 0")
+    if args.max_token_length < 0:
+        parser.error("--max-token-length must be >= 0")
+    if args.max_stored_tokens < 0:
+        parser.error("--max-stored-tokens must be >= 0")
     return args
 
 
