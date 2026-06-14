@@ -60,6 +60,13 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
   largely stable across pre/post-RoPE in this single seed: Mistral base/IT recur
   at the same L17/H26 head, Llama rows also survive, and Gemma 2 2B-it remains
   weakly localized.
+- [CodeXGLUE code-language pre/post-RoPE sweep](docs/research_notes/codexglue_code_language_pre_post_rope_n1000.md):
+  a Mistral-7B-Instruct 4bit pass over six CodeSearchNet language classes.
+  The strongest readout is stable across pre/post-RoPE and
+  `pool_last_k=1,3,5` at L21/H18, with a broader late L21-L25 code-language
+  band and increasing silhouette as the final-token pool widens. This is a
+  task-dependent counterpoint to the natural-language stance runs: code
+  language identity appears later and is more RoPE-stable in this capped run.
 - [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
   an initial Mistral-IT check where stance separation survives after RoPE. Its
   "weaker, broader, later" wording is now treated as pilot-specific rather than
