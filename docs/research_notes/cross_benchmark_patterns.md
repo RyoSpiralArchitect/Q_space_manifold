@@ -220,8 +220,8 @@ variable is readable, not yet which head causes downstream behavior.
   the ABBR-excluded TREC check.
 - Run dense checkpoints for the same CodeXGLUE matrix.
 - Relax the CodeXGLUE `--max-token-length 64` cap on a larger machine.
-- Add K-space and V-space scans to separate Q-specific routing from generic
-  representation separability.
+- Run matched `--activation-space q/k/v` scans to separate Q-specific routing
+  from generic attention-projection separability.
 - Add causal ablation for recurring heads or bands, especially Mistral L21/H18
   and Llama L19/H30 on CodeXGLUE.
 - Repeat key matrices across dataset seeds before interpreting small

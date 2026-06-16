@@ -141,6 +141,19 @@ pre-RoPE  = stance routing before positional rotation
 post-RoPE = stance routing after positional phase is applied
 ```
 
+The same capture pipeline can also inspect pre-attention K-space and V-space:
+
+```bash
+--activation-space q  # default query projection space
+--activation-space k  # key projection space
+--activation-space v  # value projection space
+```
+
+For RoPE models, K/V comparison currently uses `--q-capture-stage pre-rope`.
+Post-RoPE capture remains Q-only because the current hook records RoPE-applied
+queries from the model's rotary call. This keeps Q pre/post-RoPE comparisons
+separate from Q/K/V projection-space comparisons.
+
 ## Representative Run
 
 The current representative scan used:
@@ -549,6 +562,11 @@ token_flow_metrics_layer_L_head_H.csv
 token_flow_meta_layer_L_head_H.csv
 ```
 
+For `--activation-space k` or `--activation-space v`, the vector bundle keeps
+the legacy `q_space_vectors.npz` filename for compatibility, but
+`run_metadata.json`, `analysis_summary.json`, and batch CSVs record
+`activation_space` and `activation_space_label`.
+
 Optional outputs:
 
 ```text
@@ -587,8 +605,9 @@ distributed linear readout.
   the ABBR-excluded TREC check;
 - compare pre-RoPE and post-RoPE Q capture on the strongest 4bit heads before
   treating the dense run as a final architecture check;
-- compare Q-space against K-space and V-space scans to determine whether weak
-  Gemma localization is Q-specific or representation-wide;
+- run matched `--activation-space q/k/v` scans to determine whether weak Gemma
+  localization and the common-mode residual geometry are Q-specific or
+  representation-wide;
 - add a two-class silhouette ceiling sanity check so SUBJ scores can be
   interpreted against an empirical upper bound;
 - test whether Gemma's weaker single-head signal becomes stronger in 9B or
