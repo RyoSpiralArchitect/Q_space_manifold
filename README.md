@@ -78,7 +78,9 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
   a second-pass diagnostic for TREC and CodeXGLUE rows where raw cosine
   silhouette is modest but linear probe accuracy is high. The current reading is
   that a strong common Q direction can compress raw cosine geometry while
-  leaving class-specific residual directions linearly readable.
+  leaving class-specific residual directions linearly readable. Matched
+  post-RoPE audits preserve the linear readout while slightly weakening raw
+  compactness.
 - [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
   an initial Mistral-IT check where stance separation survives after RoPE. Its
   "weaker, broader, later" wording is now treated as pilot-specific rather than
