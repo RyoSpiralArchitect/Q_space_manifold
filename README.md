@@ -74,6 +74,11 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
   Mistral recurs at L21/H18, Llama 3 at L19/H30, and Gemma 2 2B remains weaker
   and more diffuse. The readout is largely stable across pre/post-RoPE in
   Mistral and Llama 3.
+- [Silhouette vs probe geometry audit](docs/research_notes/silhouette_probe_geometry_audit.md):
+  a second-pass diagnostic for TREC and CodeXGLUE rows where raw cosine
+  silhouette is modest but linear probe accuracy is high. The current reading is
+  that a strong common Q direction can compress raw cosine geometry while
+  leaving class-specific residual directions linearly readable.
 - [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
   an initial Mistral-IT check where stance separation survives after RoPE. Its
   "weaker, broader, later" wording is now treated as pilot-specific rather than
@@ -561,10 +566,25 @@ layer_trajectory_3d_head_H_focus_layer_L.png
 query_flow_3d_layer_L_head_H_all.png
 ```
 
+The repository also includes a standalone second-pass audit script for existing
+vector bundles:
+
+```bash
+./scripts/q_space_geometry_audit.py \
+  --run-dir ~/q_space_runs/.../pool_last_k_5/llama3_base \
+  --output-dir ~/q_space_runs/geometry_audit_example
+```
+
+It writes centroid, kNN, PCA-probe, one-vs-rest margin, and centered-geometry
+CSV diagnostics for checking whether a row behaves like a compact cluster or a
+distributed linear readout.
+
 ## Near-Term Research Directions
 
 - repeat the 12-cell SUBJ / prompted-SST-2 matrix on dense same-family
   checkpoints;
+- extend the silhouette-vs-probe geometry audit to matched post-RoPE rows and
+  the ABBR-excluded TREC check;
 - compare pre-RoPE and post-RoPE Q capture on the strongest 4bit heads before
   treating the dense run as a final architecture check;
 - compare Q-space against K-space and V-space scans to determine whether weak

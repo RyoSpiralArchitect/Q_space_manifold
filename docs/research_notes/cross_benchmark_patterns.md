@@ -28,6 +28,7 @@ The main tracked tables used here are:
 - `examples/trec_coarse_pre_post_rope_n1000ish/pre_post_pool_last_k_comparison.csv`
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_best_per_model_comparison.csv`
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_pool_last_k_comparison.csv`
+- `examples/geometry_audit_silhouette_vs_probe/geometry_audit_summary.csv`
 
 ## Benchmark Matrix
 
@@ -93,6 +94,25 @@ spherical class clusters under cosine silhouette.
 
 That means a weak silhouette is not automatically "no information". It may mean
 "not a clean single-head manifold cluster".
+
+The first dedicated geometry audit supports that interpretation for
+representative TREC and CodeXGLUE rows. See
+`docs/research_notes/silhouette_probe_geometry_audit.md`. The audited rows show
+large common Q directions, modest raw cosine silhouette, and strong residual
+linear readouts. For example, TREC Mistral-base L17/H26 has sampled silhouette
+`0.0948` but 5-fold linear probe accuracy `0.876`; CodeXGLUE Mistral-IT L21/H18
+has sampled silhouette `0.0895` but linear probe accuracy `0.974`.
+
+This suggests a more precise reading:
+
+```text
+silhouette asks whether classes form compact raw cosine clusters;
+the probe asks whether task directions are linearly decodable.
+```
+
+Those are related, but not equivalent. A strong common Q component can compress
+raw cosine geometry while leaving class-specific residual directions available
+to a linear readout.
 
 ### 4. Pooling is diagnostic, not just robustness
 
@@ -196,11 +216,8 @@ variable is readable, not yet which head causes downstream behavior.
 
 ## Next Checks
 
-- Run a dedicated silhouette-vs-probe geometry audit for TREC and CodeXGLUE:
-  pairwise class centroid distances, within/between-class scatter,
-  one-vs-rest margins, kNN accuracy, and probe accuracy as a function of PCA
-  dimension. This should test whether the signal is a compact manifold cluster
-  or a distributed linear code.
+- Extend the silhouette-vs-probe geometry audit to matched post-RoPE rows and
+  the ABBR-excluded TREC check.
 - Run dense checkpoints for the same CodeXGLUE matrix.
 - Relax the CodeXGLUE `--max-token-length 64` cap on a larger machine.
 - Add K-space and V-space scans to separate Q-specific routing from generic
