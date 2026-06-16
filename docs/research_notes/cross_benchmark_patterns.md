@@ -11,8 +11,10 @@ medium-scale benchmark set:
 - CodeXGLUE / CodeSearchNet code language
 
 It is a synthesis note, not a final claim. The evidence is still geometric and
-predictive rather than causal. All model rows discussed here use the current
-MLX 4bit checkpoints unless otherwise stated.
+predictive rather than causal, and the benchmark-level patterns below are
+single-seed observations unless a section explicitly says otherwise. All model
+rows discussed here use the current MLX 4bit checkpoints unless otherwise
+stated.
 
 ## Compact Artifacts
 
@@ -29,12 +31,17 @@ The main tracked tables used here are:
 
 ## Benchmark Matrix
 
-| benchmark | task readout | strongest depth pattern | pooling pattern | pre/post-RoPE behavior |
-| --- | --- | --- | --- | --- |
-| SUBJ | subjective/objective stance | Mistral early/mid, Llama-IT late, Gemma-base late, Gemma-IT weak/diffuse | `pool_last_k=1` in the tracked headline | signal survives post-RoPE; exact heads may shift |
-| prompted SST-2 | sentiment polarity under explicit prompt frame | Mistral/Llama-IT late or mid/late strongest; Gemma-IT weak | pooling changes both score and location | signal survives, but prompt/cue position makes the readout more mobile |
-| TREC coarse | answer-type routing for questions | mostly mid or mid/late around L17-L18 for Mistral/Llama/Gemma-base | `pool_last_k=1` is usually strongest | very stable pre/post at headline level |
-| CodeXGLUE code language | code-language routing | late across all families; Mistral L21/H18, Llama L19/H30, Gemma late/final | `pool_last_k=1 -> 3 -> 5` strengthens every model | largely stable in Mistral/Llama; weaker and more diffuse in Gemma |
+| benchmark | task readout | sample shape | representative strength | strongest depth pattern | pooling pattern | pre/post-RoPE behavior |
+| --- | --- | --- | --- | --- | --- | --- |
+| SUBJ | subjective/objective stance | `1000/class`, 2 classes | max sil `0.227`; tracked probe up to `0.935` in the smaller base/IT probe artifact | Mistral early/mid, Llama-IT late, Gemma-base late, Gemma-IT weak/diffuse | `pool_last_k=1` in the tracked headline | signal survives post-RoPE; exact heads may shift |
+| prompted SST-2 | sentiment polarity under explicit prompt frame | `1000/class`, 2 classes | max sil `0.225` pre, `0.198` post; retained post probe `0.908` on Llama3-IT | Mistral/Llama-IT late or mid/late strongest; Gemma-IT weak | pooling changes both score and location | signal survives, but prompt/cue position makes the readout more mobile |
+| TREC coarse | answer-type routing for questions | `4817` rows, 6 imbalanced classes | max sil `0.102` pre, `0.089` post; matching probe `0.839/0.831` | mostly mid or mid/late around L17-L18 for Mistral/Llama/Gemma-base | `pool_last_k=1` is usually strongest | very stable pre/post at headline level |
+| CodeXGLUE code language | code-language routing | `1000/class`, 6 balanced languages | max sil `0.203` pre, `0.178` post; matching probe `0.982/0.981` | late across all families; Mistral L21/H18, Llama L19/H30, Gemma late/final | `pool_last_k=1 -> 3 -> 5` strengthens every model | largely stable in Mistral/Llama; weaker and more diffuse in Gemma |
+
+The probe values in this table are representative tracked values, not a single
+uniformly recomputed probe table across every benchmark. TREC and CodeXGLUE use
+matching rows from their pre/post comparison artifacts. SUBJ and prompted SST-2
+use the retained probe artifacts available for their notes.
 
 The strongest cross-benchmark lesson is not that there is one universal
 Q-space head. The pattern is closer to:
@@ -149,6 +156,19 @@ across all six model aliases, strengthens monotonically as the final-token pool
 widens, and survives post-RoPE in Mistral and Llama 3 with the same best
 layer/head at `pool_last_k=5`.
 
+The tracked CodeXGLUE dataset is balanced:
+
+```text
+python 1000 + java 1000 + javascript 1000 + go 1000 + php 1000 + ruby 1000
+= 6000 rows
+```
+
+The source JSON caps code text at 3000 characters, and the current six-model
+run additionally uses `--max-token-length 64`. Therefore the late-routing
+interpretation is provisional until the token-length cap is relaxed. The current
+result shows a late readout under this capped condition; it does not yet prove
+that the same depth profile holds for long, uncapped code contexts.
+
 The current reading is:
 
 ```text
@@ -176,6 +196,11 @@ variable is readable, not yet which head causes downstream behavior.
 
 ## Next Checks
 
+- Run a dedicated silhouette-vs-probe geometry audit for TREC and CodeXGLUE:
+  pairwise class centroid distances, within/between-class scatter,
+  one-vs-rest margins, kNN accuracy, and probe accuracy as a function of PCA
+  dimension. This should test whether the signal is a compact manifold cluster
+  or a distributed linear code.
 - Run dense checkpoints for the same CodeXGLUE matrix.
 - Relax the CodeXGLUE `--max-token-length 64` cap on a larger machine.
 - Add K-space and V-space scans to separate Q-specific routing from generic

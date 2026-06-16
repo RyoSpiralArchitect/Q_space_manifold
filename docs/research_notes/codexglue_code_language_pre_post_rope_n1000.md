@@ -46,6 +46,8 @@ Large full outputs, including `q_space_vectors.npz`, remain outside the repo:
 - controls: 100 silhouette label permutations, top-1 layer/head null, linear
   probe without permutation nulls
 
+### Sampling Policy
+
 The source JSON was built from the Hugging Face Dataset Viewer rows API and
 stores balanced counts:
 
@@ -54,10 +56,21 @@ python 1000 + java 1000 + javascript 1000 + go 1000 + php 1000 + ruby 1000
 = 6000 rows
 ```
 
+There is no class imbalance in this tracked CodeXGLUE matrix. Each language
+contributes exactly 1000 validation rows. The six-model pre/post runs reuse the
+same JSON file, so model-family and pre/post comparisons are over the same
+balanced sample set.
+
 The code text had already been capped in the dataset file to 3000 characters.
 The run further capped model input to 64 tokens and retained only the last 5
 token Q records for token-flow outputs. The final-token or pooled-final-token
 Q vectors still use all 6000 examples.
+
+This cap is an important caveat. The current late-routing interpretation is a
+result under `--max-token-length 64`; it may depend on how much of each snippet
+is visible and where the retained tail falls after truncation. Relaxing the
+token-length cap on a larger machine is required before treating the late
+code-language profile as a property of uncapped code contexts.
 
 ## Six-Model Headline
 
