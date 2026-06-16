@@ -7,13 +7,22 @@ matched pre-RoPE and post-RoPE captures. The task is not sentiment,
 subjectivity, or question type. It asks whether final-token Q geometry contains
 a language-family routing signal for code snippets.
 
+The note began as a Mistral-7B-Instruct pilot. It now also includes the matched
+six-model base/instruction-tuned sweep across Mistral, Llama 3, and Gemma 2 2B.
+
 Compact tracked artifacts:
 
+- `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_rope_pool_last_k_sweep_summary.csv`
+- `examples/codexglue_code_language_6models_pre_post_rope_n1000/post_rope_pool_last_k_sweep_summary.csv`
+- `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_pool_last_k_comparison.csv`
+- `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_best_per_model_comparison.csv`
 - `examples/codexglue_code_language_n1000_mistral_it_pre_rope/pool_last_k_sweep_summary.csv`
 - `examples/codexglue_code_language_n1000_mistral_it_post_rope/pool_last_k_sweep_summary.csv`
 
 Large full outputs, including `q_space_vectors.npz`, remain outside the repo:
 
+- `~/q_space_runs/codexglue_code_language_n1000_6models_pre_rope_len64_capped`
+- `~/q_space_runs/codexglue_code_language_n1000_6models_post_rope_len64_capped`
 - `~/q_space_runs/codexglue_code_language_n1000_mistral_it_pre_rope_len64_capped_sweep`
 - `~/q_space_runs/codexglue_code_language_n1000_mistral_it_post_rope_len64_capped_sweep`
 
@@ -24,7 +33,8 @@ Large full outputs, including `q_space_vectors.npz`, remain outside the repo:
 - task framing: code-language routing
 - classes: `python`, `java`, `javascript`, `go`, `php`, `ruby`
 - sample: `1000` rows per class, `6000` rows total
-- model: `mlx-community/Mistral-7B-Instruct-v0.3-4bit`
+- models: Mistral-7B base/instruct, Llama-3-8B base/instruct, Gemma-2-2B
+  base/instruct, all current `mlx-community/*-4bit` checkpoints
 - backend: MLX
 - Q captures: pre-RoPE Q projection output and post-RoPE Q before attention
   scoring
@@ -49,10 +59,40 @@ The run further capped model input to 64 tokens and retained only the last 5
 token Q records for token-flow outputs. The final-token or pooled-final-token
 Q vectors still use all 6000 examples.
 
-## Headline Result
+## Six-Model Headline
+
+The first surprise was that the Mistral-IT result generalized. At
+`pool_last_k=5`, all six model aliases show a late code-language readout. The
+exact head is family-specific, but the depth is consistently late relative to
+the earlier natural-language stance probes.
+
+| model | pre-RoPE best | pre sil | pre probe | post-RoPE best | post sil | post probe | post/pre |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Mistral-7B base | L21/H18 | 0.1011 | 0.9765 | L21/H18 | 0.0940 | 0.9737 | 0.93 |
+| Mistral-7B instruct | L21/H18 | 0.0924 | 0.9733 | L21/H18 | 0.0860 | 0.9712 | 0.93 |
+| Llama-3-8B base | L19/H30 | 0.2031 | 0.9818 | L19/H30 | 0.1783 | 0.9810 | 0.88 |
+| Llama-3-8B instruct | L19/H30 | 0.1807 | 0.9788 | L19/H30 | 0.1492 | 0.9792 | 0.83 |
+| Gemma-2-2B base | L19/H4 | 0.0929 | 0.9800 | L20/H5 | 0.0718 | 0.9815 | 0.77 |
+| Gemma-2-2B-it | L25/H5 | 0.0492 | 0.9662 | L25/H0 | 0.0313 | 0.9593 | 0.64 |
+
+The six-model version strengthens three parts of the reading:
+
+- **late band**: all best rows are at relative depth `0.61-1.00`;
+- **pooling amplification**: widening from `pool_last_k=1` to `5` increases
+  silhouette for every model in both capture stages;
+- **RoPE survival**: post-RoPE is usually weaker, but Mistral and Llama 3 keep
+  the same best layer/head at `pool_last_k=5`.
+
+Gemma 2 2B remains the contrast case. The base model keeps a late readable
+code-language row, while the instruction-tuned model has a weaker final-layer
+surface. Even there, the best-head linear probe remains high, so the cautious
+phrasing is weak single-head clustering, not absence of code-language
+information.
+
+## Mistral-IT Pooling Detail
 
 Across pre-RoPE and post-RoPE, and across all three pooling values, the same
-best layer/head appears:
+best layer/head appears in the original Mistral-IT pilot:
 
 | capture | pool_last_k | best layer/head | relative depth | silhouette | null mean | null z | p>=actual | LOO probe acc |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -86,16 +126,18 @@ Top layer/head rows for `pool_last_k=5`:
 | 9 | L22/H17 | 0.0714 | L22/H21 | 0.0657 |
 | 10 | L25/H24 | 0.0711 | L25/H24 | 0.0647 |
 
-This looks more like a late code-language band than a lone magic head. The
-best single readout is L21/H18, while neighboring top rows cluster across
-roughly L21-L25 in both capture stages.
+This looks more like a late code-language band than a lone magic head. In
+Mistral the best single readout is L21/H18, while neighboring top rows cluster
+across roughly L21-L25 in both capture stages. The six-model run extends that
+band-level framing: Llama 3 peaks at L19/H30, Gemma 2 2B base around L19-L20,
+and Gemma 2 2B-it at the final layer.
 
 ## Interpretation
 
 For natural-language SUBJ/SST/TREC runs, useful Q-space readouts often appeared
 in earlier or middle bands depending on model family and task. This code
-language run moves the strongest readout later: relative depth `0.677`, with a
-broader late band through roughly L21-L25.
+language run moves the strongest readout later. In the six-model `pool_last_k=5`
+matrix, the best rows sit at relative depth `0.61-1.00`.
 
 The matched post-RoPE run weakens the metric slightly but does not reorganize
 the location:
@@ -108,18 +150,18 @@ post-RoPE: L21/H18, silhouette 0.0324 -> 0.0637 -> 0.0860
 A cautious interpretation is:
 
 ```text
-In this Mistral-IT 4bit CodeXGLUE code-language run, Q-space contains a late,
-pooling-stable code-language routing signal. Unlike the earlier Mistral SUBJ
-pilot where post-RoPE appeared weaker and somewhat reorganized, this capped
-code-language readout is largely RoPE-stable: the same best layer/head and
-late band survive post-RoPE with only a modest score reduction.
+In these 4bit CodeXGLUE code-language runs, Q-space contains a late,
+pooling-amplified code-language routing signal. Unlike the earlier
+natural-language stance probes, this capped code-language readout is largely
+RoPE-stable in Mistral and Llama 3: the same best layer/head survives post-RoPE
+with only a modest score reduction. Gemma 2 2B remains weaker and more diffuse,
+especially after instruction tuning.
 ```
 
-This should not yet be generalized across model families or uncapped code
-contexts. It is a single-model run, capped to 64 model tokens, with only the
-tail token-flow records retained. The next checks are other model families,
-base-vs-instruct comparisons, and a less aggressive token cap on a larger
-machine.
+This should not yet be generalized to uncapped code contexts or dense
+checkpoints. It is a six-model 4bit run, capped to 64 model tokens, with only
+the tail token-flow records retained. The next checks are dense checkpoints,
+less aggressive token caps on a larger machine, and causal ablations.
 
 ## Deeper Reading
 
@@ -128,7 +170,7 @@ SUBJ, SST-2, and TREC, the most visible Q-space readouts looked like stance,
 polarity, or question-frame probes, and their strongest bands could move by
 model family, instruction tuning, or capture stage. Here the label is not a
 discourse stance. It is code language identity, and the strongest readout moves
-later while remaining nearly invariant across pre-RoPE and post-RoPE capture.
+later while remaining fairly stable across pre-RoPE and post-RoPE capture.
 
 That suggests a more task-dependent picture:
 
@@ -141,11 +183,12 @@ code-language routing probe:
   has accumulated
 ```
 
-The recurrence of L21/H18 is especially important because it survives all six
-matched conditions in this run: pre/post capture crossed with `pool_last_k=1`,
-`3`, and `5`. The surrounding top rows also stay in a late L21-L25 band. So the
-right unit of interpretation is probably not "one special head", but a late
-code-language readout band with one strongest local probe.
+The recurrence of Mistral L21/H18 is especially important because it survives
+all six matched Mistral conditions: pre/post capture crossed with
+`pool_last_k=1`, `3`, and `5`. The six-model rerun adds a second exact
+recurrence in Llama 3 at L19/H30. The right unit of interpretation is therefore
+probably not "one special head", but a family-specific late code-language
+readout band with one strongest local probe.
 
 The monotonic pooling effect sharpens that reading. The final token alone
 already carries the signal, but pooling the last 3 or 5 tokens makes it much
@@ -162,9 +205,9 @@ than expressed as clean spherical clusters.
 One practical lesson transfers back to the broader atlas work: the
 `--target-layer-fraction 0.35` natural-language heuristic is not reliable for
 code. At the target layer around L11, the headline heads are weak or even
-negative in the top-layer/head tables, while the scan finds the readout near
-relative depth 0.68. Code-language experiments need a full layer/head scan, not
-only a stance-inspired mid-layer pin.
+negative in the top-layer/head tables, while the scan finds the readout late.
+Code-language experiments need a full layer/head scan, not only a
+stance-inspired mid-layer pin.
 
 ## Practical Note
 

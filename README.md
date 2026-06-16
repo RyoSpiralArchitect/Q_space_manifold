@@ -5,7 +5,8 @@ Exploratory tooling for probing the geometry of transformer Query vectors.
 The central question is not only *what meaning is represented*, but how a model
 forms a **stance for searching meaning**: which attention heads become sensitive
 to sentiment, subjectivity, factual framing, or discourse posture, and how those
-query directions evolve across layers and tokens.
+query directions evolve across layers and tokens. Recent runs also test whether
+code-language identity appears as a different kind of late query readout.
 
 This repository currently contains a self-contained monolithic probe:
 
@@ -31,14 +32,17 @@ task framing, token pooling, and pre/post-RoPE capture stage:
   directions for what the next attention operation will seek;
 - **discourse framing**: token-level Q-flow often looks less like a random walk
   and more like a structured path from initialization into local exploration and
-  drift.
+  drift;
+- **code-language routing**: code snippets expose a later, pooled-tail readout
+  that differs from the earlier natural-language stance probes.
 
 The current working hypothesis is:
 
 ```text
-decoder-only transformers can show stance-separating Q-space bands,
-but the measured band may move or diffuse with architecture, instruction
-tuning, prompt framing, token readout, and RoPE capture stage.
+decoder-only transformers can show task-conditioned Q-space readout bands,
+including stance-separating and code-routing geometries, but the measured band
+may move or diffuse with architecture, instruction tuning, prompt framing,
+token readout, and RoPE capture stage.
 ```
 
 This is still exploratory. The current evidence is geometric and predictive,
@@ -48,6 +52,10 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
 
 ## Research Notes
 
+- [Cross-benchmark Q-space patterns](docs/research_notes/cross_benchmark_patterns.md):
+  a synthesis across SUBJ, prompted SST-2, TREC, and CodeXGLUE. The current
+  reading is that task-conditioned Q-space readouts recur, but their depth,
+  pooling behavior, and head localization depend on the task and model family.
 - [N=1000/class 3D base-vs-instruct matrix](docs/research_notes/n1000_3d_matrix.md):
   the first medium-scale 6-model pass across SUBJ and prompted SST-2, now with
   pre/post-RoPE headline comparisons. SUBJ preserves the Mistral/Llama/Gemma
@@ -61,12 +69,11 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
   at the same L17/H26 head, Llama rows also survive, and Gemma 2 2B-it remains
   weakly localized.
 - [CodeXGLUE code-language pre/post-RoPE sweep](docs/research_notes/codexglue_code_language_pre_post_rope_n1000.md):
-  a Mistral-7B-Instruct 4bit pass over six CodeSearchNet language classes.
-  The strongest readout is stable across pre/post-RoPE and
-  `pool_last_k=1,3,5` at L21/H18, with a broader late L21-L25 code-language
-  band and increasing silhouette as the final-token pool widens. This is a
-  task-dependent counterpoint to the natural-language stance runs: code
-  language identity appears later and is more RoPE-stable in this capped run.
+  a six-model 4bit pass over six CodeSearchNet language classes. Code-language
+  identity appears as a late, pooling-amplified readout across model families:
+  Mistral recurs at L21/H18, Llama 3 at L19/H30, and Gemma 2 2B remains weaker
+  and more diffuse. The readout is largely stable across pre/post-RoPE in
+  Mistral and Llama 3.
 - [Pre/post-RoPE SUBJ pilot](docs/research_notes/pre_post_rope_subj_pilot.md):
   an initial Mistral-IT check where stance separation survives after RoPE. Its
   "weaker, broader, later" wording is now treated as pilot-specific rather than
