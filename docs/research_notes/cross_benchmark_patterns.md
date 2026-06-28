@@ -29,6 +29,7 @@ The main tracked tables used here are:
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_best_per_model_comparison.csv`
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_pool_last_k_comparison.csv`
 - `examples/codexglue_qkv_activation_space_n300/qkv_best_layer_heads.csv`
+- `examples/codexglue_qkv_activation_space_n300/resid_pre_comparison.csv`
 - `examples/natural_tasks_qkv_activation_space_n300/qkv_best_layer_heads.csv`
 - `examples/geometry_audit_silhouette_vs_probe/geometry_audit_summary.csv`
 
@@ -163,6 +164,14 @@ exposes a few sharper relationships: TREC Mistral maps `Q H26 -> KV group 6`,
 matching the best K head `H6`, while CodeXGLUE Llama maps `Q H30 -> KV group 7`
 and matches both K and V `H7`.
 
+The first `resid_pre` baseline is now available for CodeXGLUE. It shows that
+code-language identity is already somewhat readable before Q/K/V projection
+(`0.061`-`0.145` silhouette across the six model aliases), but the V-space rows
+remain much stronger (`0.132`-`0.561`). This suggests that the late V readout is
+not just an unmodified residual-stream signal; under the current capped
+condition, V appears to concentrate or reorganize a code-language variable that
+is already beginning to emerge in the residual/input stream.
+
 ## Fine Differences
 
 ### SUBJ: stance separation
@@ -243,7 +252,9 @@ The Q/K/V follow-up sharpens the activation-space part of this reading. The late
 readout remains visible in Q-space, but the raw cosine manifold is much cleaner
 in V-space. Under the capped CodeXGLUE condition, code-language identity looks
 less like a pure query-posture phenomenon and more like a late evidence geometry
-that Q can query and V carries strongly.
+that Q can query and V carries strongly. The `resid_pre` comparison adds that
+this information is not absent before projection, but V-space is substantially
+more separated than the projection input in every model row.
 
 ## Working Hypothesis
 
@@ -273,6 +284,9 @@ variable is readable, not yet which head causes downstream behavior.
 - Extend the current CodeXGLUE and natural-task n300 `--activation-space q/k/v`
   scans to larger n, pooling sweeps, relaxed token caps where relevant, and
   post-RoPE-compatible variants where the implementation supports them.
+- Run `resid_pre` baselines for the natural-task rows where K/V were strongest,
+  especially SUBJ Mistral `K/V L16/H6`, prompted SST-2 Mistral/Llama V rows, and
+  TREC Mistral `Q H26 -> KV group 6 -> K H6`.
 - Add causal ablation for recurring heads or bands, especially Mistral L21/H18
   and Llama L19/H30 on CodeXGLUE.
 - Repeat key matrices across dataset seeds before interpreting small

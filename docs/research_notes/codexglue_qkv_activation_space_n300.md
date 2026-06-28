@@ -16,12 +16,14 @@ the K and V projection spaces?
 Compact tracked artifact:
 
 - `examples/codexglue_qkv_activation_space_n300/qkv_best_layer_heads.csv`
+- `examples/codexglue_qkv_activation_space_n300/resid_pre_comparison.csv`
 
 Large full outputs, including vector bundles, remain outside the repo:
 
 - `~/q_space_runs/codexglue_code_language_n300_6models_qkv_pre_rope_pool5_len64/q`
 - `~/q_space_runs/codexglue_code_language_n300_6models_qkv_pre_rope_pool5_len64/k`
 - `~/q_space_runs/codexglue_code_language_n300_6models_qkv_pre_rope_pool5_len64/v`
+- `~/q_space_runs/codexglue_code_language_n300_6models_resid_pre_pool5_len64`
 
 ## Settings
 
@@ -32,7 +34,8 @@ Large full outputs, including vector bundles, remain outside the repo:
 - models: Mistral-7B base/instruct, Llama-3-8B base/instruct, Gemma-2-2B
   base/instruct, all current `mlx-community/*-4bit` checkpoints
 - backend: MLX
-- activation spaces: `--activation-space q`, `k`, and `v`
+- activation spaces: `--activation-space q`, `k`, `v`, and a later
+  `resid_pre` baseline
 - capture stage: `--q-capture-stage pre-rope`
 - pooling: `--pool-last-k 5`
 - token caps: `--max-token-length 64`, `--max-stored-tokens 5`,
@@ -55,6 +58,29 @@ Q head IDs.
 | Llama-3-8B instruct | L19/H30 `0.1791` | L19/H7 `0.3500` | **L19/H7 `0.5456`** |
 | Gemma-2-2B base | L19/H4 `0.0980` | L21/H1 `0.0798` | **L19/H2 `0.2557`** |
 | Gemma-2-2B-it | L19/H4 `0.0489` | L25/H0 `0.0380` | **L19/H2 `0.1319`** |
+
+## Residual/Input Baseline
+
+After the matched Q/K/V pass, a `--activation-space resid_pre` baseline was run
+with the same n300/class CodeXGLUE JSON, `pool_last_k=5`, and 64-token cap. This
+captures the input to the attention projection path before Q/K/V projection.
+The stored `H0` is a pseudo-head placeholder for the full residual/input vector,
+not an attention head.
+
+| model | Q best | V best | resid-pre best | V - resid-pre |
+| --- | ---: | ---: | ---: | ---: |
+| Mistral-7B base | L21/H18 `0.1018` | **L19/H7 `0.4261`** | L21/H0 `0.1085` | `0.3176` |
+| Mistral-7B instruct | L21/H18 `0.0938` | **L19/H7 `0.3930`** | L21/H0 `0.0956` | `0.2973` |
+| Llama-3-8B base | L19/H30 `0.2031` | **L19/H7 `0.5605`** | L20/H0 `0.1452` | `0.4153` |
+| Llama-3-8B instruct | L19/H30 `0.1791` | **L19/H7 `0.5456`** | L20/H0 `0.1242` | `0.4215` |
+| Gemma-2-2B base | L19/H4 `0.0980` | **L19/H2 `0.2557`** | L25/H0 `0.0911` | `0.1645` |
+| Gemma-2-2B-it | L19/H4 `0.0489` | **L19/H2 `0.1319`** | L25/H0 `0.0611` | `0.0707` |
+
+The residual/input baseline is not empty. It becomes readable in the same
+late-ish region for Mistral and Llama (`L21` and `L20`) and at the final Gemma
+layer (`L25`). However, it is much smaller than V-space in every row. The
+residual-to-V ratio ranges from about `0.23` to `0.46`, with the largest gaps in
+Mistral and Llama.
 
 ## Observations
 
@@ -79,6 +105,12 @@ profile: Q is readable, K is stronger, and V is strongest. Gemma follows the
 same ordering in a weaker form, with instruction tuning reducing all three
 spaces.
 
+The residual/input baseline adds an important constraint. Code-language
+identity is already somewhat readable before Q/K/V projection, so V-space is
+not creating the task variable from nothing. But the V-space separation is far
+larger than the residual/input baseline, so the strongest V result is not well
+explained as a simple copy of pre-existing residual geometry.
+
 This does not mean that Q-space was irrelevant. The earlier Q-space sweep showed
 that code-language identity is linearly readable from late Q vectors. This
 follow-up says that, under the capped CodeXGLUE condition, the cleanest raw
@@ -98,6 +130,18 @@ identified from accumulated lexical and syntactic evidence in the snippet tail.
 The V projection is a plausible place for that evidence to become more directly
 organized than in the query posture itself. K-space can also be strong,
 especially in Llama 3, but it is not uniformly as separated as V-space.
+
+The `resid_pre` pass refines that interpretation:
+
+```text
+late residual/input states already contain code-language information, but the
+V projection appears to concentrate or reorganize it into a much cleaner raw
+cosine geometry.
+```
+
+This still does not identify a causal mechanism. The comparison only says that
+the V-space readout is stronger than the pre-projection baseline under the same
+capped, pooled-tail condition.
 
 The most striking part is the layer recurrence. Q-space already placed the
 CodeXGLUE readout late. K/V do not move it earlier; instead, V-space concentrates
@@ -138,6 +182,8 @@ for later causal or residual-baseline checks.
 - It is pre-RoPE only for K/V. The current CLI supports post-RoPE capture for
   Q-space, while this K/V comparison uses projection outputs before positional
   rotation.
+- `resid_pre` uses `H0` only as a pseudo-head placeholder for the full
+  residual/input vector. It should not be compared as a real head identity.
 - These are geometric readouts, not causal assignments. Ablation is still needed
   before claiming that a V head causes downstream code-language behavior.
 
@@ -147,9 +193,8 @@ The next useful checks are:
 
 - repeat the Q/K/V comparison at n1000 or with a denser machine;
 - relax the 64-token cap and see whether V remains the dominant space;
-- compare strong V rows against `--activation-space resid_pre` to test whether
-  V-space is selecting code-language evidence or mainly preserving a residual
-  readout already present before projection;
+- run the same residual/input baseline with relaxed token caps and dataset
+  seeds to check whether the V-minus-residual gap is stable;
 - extend the geometry audit to matched Q/K/V rows, especially Llama 3 where K and
   V are both strong;
 - add causal ablations for late CodeXGLUE Q/K/V rows rather than only Q heads.
