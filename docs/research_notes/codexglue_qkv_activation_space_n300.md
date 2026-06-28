@@ -147,6 +147,9 @@ The next useful checks are:
 
 - repeat the Q/K/V comparison at n1000 or with a denser machine;
 - relax the 64-token cap and see whether V remains the dominant space;
+- compare strong V rows against `--activation-space resid_pre` to test whether
+  V-space is selecting code-language evidence or mainly preserving a residual
+  readout already present before projection;
 - extend the geometry audit to matched Q/K/V rows, especially Llama 3 where K and
   V are both strong;
 - add causal ablations for late CodeXGLUE Q/K/V rows rather than only Q heads.

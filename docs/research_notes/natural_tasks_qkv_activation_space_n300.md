@@ -180,6 +180,8 @@ Q-space is a posture probe, while K/V can expose address and evidence geometry.
 
 - repeat selected Q/K/V rows at n1000;
 - run post-RoPE-compatible Q checks beside the pre-RoPE K/V pass;
+- compare selected rows against `--activation-space resid_pre` to see whether
+  the task variable is already readable before Q/K/V projection;
 - add geometry audits for the strongest natural-task K/V rows, especially SUBJ
   Mistral `K/V L16/H6` and prompted SST-2 Mistral/Llama V rows;
 - test whether Gemma 2 2B-it is genuinely diffuse by moving to larger Gemma

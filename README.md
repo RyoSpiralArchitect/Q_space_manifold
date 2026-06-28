@@ -578,6 +578,10 @@ For `--activation-space k` or `--activation-space v`, the vector bundle keeps
 the legacy `q_space_vectors.npz` filename for compatibility, but
 `run_metadata.json`, `analysis_summary.json`, and batch CSVs record
 `activation_space`, `activation_space_label`, and `activation_capture_stage`.
+`--activation-space resid_pre` captures the input to the attention projection
+path as a one-head full-hidden-vector baseline, useful for checking whether
+Q/K/V projections create a task geometry or mostly preserve information already
+readable in the residual stream.
 
 Optional outputs:
 
@@ -620,6 +624,8 @@ distributed linear readout.
 - extend matched `--activation-space q/k/v` scans beyond the current CodeXGLUE
   and natural-task n300 pre-RoPE passes, especially to larger n, pooling sweeps,
   relaxed token caps, and geometry audits of K/V rows;
+- compare strong Q/K/V rows against `--activation-space resid_pre` baselines to
+  separate projection-created geometry from residual-stream information;
 - add a two-class silhouette ceiling sanity check so SUBJ scores can be
   interpreted against an empirical upper bound;
 - test whether Gemma's weaker single-head signal becomes stronger in 9B or

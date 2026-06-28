@@ -112,12 +112,25 @@ ACTIVATION_SPACE_ALIASES = {
     "values": "v",
     "value-space": "v",
     "value_space": "v",
+    "resid": "resid_pre",
+    "residual": "resid_pre",
+    "residual-stream": "resid_pre",
+    "residual_stream": "resid_pre",
+    "resid-pre": "resid_pre",
+    "resid_pre": "resid_pre",
+    "residual-pre": "resid_pre",
+    "residual_pre": "resid_pre",
+    "projection-input": "resid_pre",
+    "projection_input": "resid_pre",
+    "attn-input": "resid_pre",
+    "attn_input": "resid_pre",
 }
 
 ACTIVATION_SPACE_LABELS = {
     "q": "Q",
     "k": "K",
     "v": "V",
+    "resid_pre": "resid-pre",
 }
 
 
@@ -591,6 +604,13 @@ def q_capture_position_note(
 ) -> str:
     activation_label = activation_space_label(activation_space)
     if stage == Q_STAGE_PRE_ROPE:
+        if activation_space == "resid_pre":
+            return (
+                "This is the input to the attention projection path for each layer, "
+                "captured before Q/K/V projection. Use it as a residual-stream-like "
+                "baseline for deciding whether Wq/Wk/Wv create or mainly preserve "
+                "the task-readable geometry."
+            )
         if activation_space == "v":
             return (
                 f"This is the pre-attention {activation_label} projection output. "
@@ -796,7 +816,7 @@ def infer_torch_shape(model: Any) -> tuple[int, int, int, int]:
 
 def torch_projection_candidates(activation_space: str) -> list[TorchProjectionSpec]:
     space = normalize_activation_space(activation_space)
-    if space == "q":
+    if space in {"q", "resid_pre"}:
         separate_names = ["q_proj", "query_proj", "wq"]
     elif space == "k":
         separate_names = ["k_proj", "key_proj", "wk"]
@@ -878,6 +898,18 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
     def make_hook(layer_idx: int):
         def q_hook(module: Any, inputs: tuple[Any, ...], output: Any) -> None:
             projection_output = output[0] if isinstance(output, (tuple, list)) else output
+            if activation_space == "resid_pre":
+                if not inputs:
+                    raise RuntimeError(f"layer {layer_idx} residual baseline hook received no inputs")
+                captured = inputs[0]
+                if len(captured.shape) != 3:
+                    raise RuntimeError(
+                        f"layer {layer_idx} residual baseline input shape {tuple(captured.shape)} "
+                        "does not match [batch, seq, hidden]"
+                    )
+                captured = captured[:, None, :, :].contiguous()
+                current_q_cache[layer_idx] = captured.detach().float().cpu().numpy()[0]
+                return
             if spec.kind == "fused_qkv":
                 q_width = num_heads * head_dim
                 offset = {"q": 0, "k": q_width, "v": 2 * q_width}[activation_space]
@@ -947,7 +979,7 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
             "model_path": args.model_path,
             "device": device,
             "projection_path": spec.path_template,
-            "projection_kind": spec.kind,
+            "projection_kind": "resid_pre_projection_input" if activation_space == "resid_pre" else spec.kind,
             "activation_space": activation_space,
             "activation_space_label": activation_space_label(activation_space),
             "q_capture_stage": q_capture_stage,
@@ -962,7 +994,7 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
             "heads": int(final_q_all.shape[2]),
             "query_heads": num_heads,
             "hidden_dim": hidden_dim,
-            "head_dim": head_dim,
+            "head_dim": int(final_q_all.shape[-1]),
             "pool_last_k": args.pool_last_k,
         },
     )
@@ -1020,7 +1052,7 @@ def find_mlx_attention(layer: Any) -> tuple[Any, str]:
 
 def mlx_projection_names(activation_space: str) -> list[str]:
     space = normalize_activation_space(activation_space)
-    if space == "q":
+    if space in {"q", "resid_pre"}:
         return ["q_proj", "wq", "query_proj"]
     if space == "k":
         return ["k_proj", "wk", "key_proj"]
@@ -1058,6 +1090,22 @@ class MlxQCaptureWrapper:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         output = self._inner(*args, **kwargs)
         self._cache[self._layer_idx] = output
+        return output
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+class MlxResidualInputCaptureWrapper:
+    def __init__(self, inner: Any, layer_idx: int, cache: dict[int, Any]) -> None:
+        self._inner = inner
+        self._layer_idx = layer_idx
+        self._cache = cache
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if args:
+            self._cache[self._layer_idx] = args[0]
+        output = self._inner(*args, **kwargs)
         return output
 
     def __getattr__(self, name: str) -> Any:
@@ -1151,7 +1199,7 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
     if q_capture_stage == Q_STAGE_POST_ROPE and activation_space != "q":
         raise SystemExit(
             "--q-capture-stage post-rope currently captures RoPE-applied Q only. "
-            "Use --q-capture-stage pre-rope with --activation-space k/v for K/V projection-space comparisons."
+            "Use --q-capture-stage pre-rope with --activation-space k/v/resid_pre for companion comparisons."
         )
 
     load_kwargs: dict[str, Any] = {}
@@ -1182,7 +1230,10 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
         else:
             original = getattr(parent, attr)
             originals.append((parent, attr, original))
-            setattr(parent, attr, MlxQCaptureWrapper(original, layer_idx, current_q_cache))
+            if activation_space == "resid_pre":
+                setattr(parent, attr, MlxResidualInputCaptureWrapper(original, layer_idx, current_q_cache))
+            else:
+                setattr(parent, attr, MlxQCaptureWrapper(original, layer_idx, current_q_cache))
 
     final_q_records: list[Any] = []
     token_q_records: list[Any] = []
@@ -1203,7 +1254,14 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
             for layer_idx in range(n_layers):
                 q_raw = current_q_cache[layer_idx]
                 mx.eval(q_raw)
-                if q_capture_stage == Q_STAGE_POST_ROPE:
+                if activation_space == "resid_pre":
+                    if len(q_raw.shape) != 3:
+                        raise RuntimeError(
+                            f"MLX layer {layer_idx} residual baseline shape {q_raw.shape} "
+                            "does not match [batch, seq, hidden]"
+                        )
+                    q_np = np.array(q_raw[:, None, :, :]).astype("float32")[0]
+                elif q_capture_stage == Q_STAGE_POST_ROPE:
                     if len(q_raw.shape) != 4 or q_raw.shape[1] != num_heads or q_raw.shape[-1] != head_dim:
                         raise RuntimeError(
                             f"MLX layer {layer_idx} post-RoPE Q shape {q_raw.shape} does not match "
@@ -1244,7 +1302,7 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
             "backend": "mlx",
             "model_path": args.model_path,
             "projection_path": projection_path,
-            "projection_kind": f"{activation_space}_proj",
+            "projection_kind": "resid_pre_projection_input" if activation_space == "resid_pre" else f"{activation_space}_proj",
             "activation_space": activation_space,
             "activation_space_label": activation_space_label(activation_space),
             "rope_path": rope_path if q_capture_stage == Q_STAGE_POST_ROPE else "",
@@ -1260,7 +1318,7 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
             "heads": int(final_q_all.shape[2]),
             "query_heads": num_heads,
             "hidden_dim": hidden_dim,
-            "head_dim": head_dim,
+            "head_dim": int(final_q_all.shape[-1]),
             "pool_last_k": args.pool_last_k,
         },
     )
@@ -1534,8 +1592,11 @@ def save_figure(fig: Any, path: Path, *, show: bool) -> None:
 
 def q_capture_label(args: argparse.Namespace) -> str:
     stage = getattr(args, "q_capture_stage", "")
-    activation_label = activation_space_label(getattr(args, "activation_space", "q"))
+    activation_space = normalize_activation_space(getattr(args, "activation_space", "q"))
+    activation_label = activation_space_label(activation_space)
     if stage == Q_STAGE_PRE_ROPE:
+        if activation_space == "resid_pre":
+            return "pre-projection residual/input baseline"
         return f"pre-RoPE {activation_label} projection output"
     if stage == Q_STAGE_POST_ROPE:
         return "post-RoPE Q, pre-score"
@@ -3796,8 +3857,8 @@ def parse_args() -> argparse.Namespace:
         "--activation-space",
         default="q",
         help=(
-            "Which attention projection space to analyze: q/query, k/key, or v/value. "
-            "K/V capture currently uses pre-RoPE projection outputs."
+            "Which attention space to analyze: q/query, k/key, v/value, or resid_pre/residual "
+            "for the projection-input baseline. K/V and resid_pre capture use pre-RoPE/pre-projection outputs."
         ),
     )
     parser.add_argument(
