@@ -19,6 +19,9 @@ Compact CSVs are tracked under:
 - `examples/geometry_audit_silhouette_vs_probe/trec_mistral_base_pre_l17_h26_pca_probe_curve.csv`
 - `examples/geometry_audit_silhouette_vs_probe/codexglue_llama3_base_pre_l19_h30_pca_probe_curve.csv`
 - `examples/geometry_audit_silhouette_vs_probe/codexglue_mistral_it_pre_l21_h18_pca_probe_curve.csv`
+- `examples/geometry_audit_pre_post_rope/pre_post_geometry_audit_comparison.csv`
+- `examples/geometry_audit_pre_post_rope/pca_probe_pre_post_comparison.csv`
+- `examples/geometry_audit_pre_post_rope/post_rope_geometry_audit_summary.csv`
 
 The source vectors remain outside the repo under `~/q_space_runs/...` because
 the vector bundles are large.
@@ -128,6 +131,49 @@ while linear probes can read residual task axes.
 This explains why modest silhouette and high probe accuracy can coexist without
 requiring the signal to be spurious.
 
+## Post-RoPE Follow-Up
+
+The same audit was then run on matched post-RoPE rows:
+
+- TREC Mistral-base L17/H26, `pool_last_k=1`;
+- CodeXGLUE Llama3-base L19/H30, `pool_last_k=5`;
+- CodeXGLUE Mistral-IT L21/H18, `pool_last_k=5`.
+
+These are matched layer/head rows, not newly chosen post-hoc rows. In all three
+cases the same layer/head remains the best post-RoPE row in the corresponding
+monolith summary.
+
+| row | pre sampled sil | post sampled sil | pre probe | post probe | pre centered ratio | post centered ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| TREC Mistral-base L17/H26 | 0.0948 | 0.0831 | 0.876 | 0.874 | 2.169 | 2.083 |
+| CodeXGLUE Llama3-base L19/H30 | 0.2044 | 0.1791 | 0.982 | 0.981 | 2.386 | 2.279 |
+| CodeXGLUE Mistral-IT L21/H18 | 0.0895 | 0.0841 | 0.974 | 0.971 | 1.884 | 1.856 |
+
+The post-RoPE result is not a collapse. It is closer to:
+
+```text
+raw compactness weakens slightly after RoPE,
+but the residual linear readout and centered class-separation ratio remain.
+```
+
+This is exactly the kind of outcome that makes the pre/post distinction useful.
+If the signal disappeared post-RoPE, the pre-RoPE audit would look more like a
+positioning artifact. If nothing changed at all, RoPE would look irrelevant to
+this geometry. Instead, the audited rows preserve the task readout while shaving
+some raw cosine compactness.
+
+The PCA probe curves tell the same story:
+
+| row | pre PCA-8 | post PCA-8 | pre PCA-16 | post PCA-16 | pre full-128 | post full-128 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| TREC Mistral-base L17/H26 | 0.679 | 0.674 | 0.785 | 0.778 | 0.876 | 0.874 |
+| CodeXGLUE Llama3-base L19/H30 | 0.936 | 0.927 | 0.970 | 0.971 | 0.982 | 0.981 |
+| CodeXGLUE Mistral-IT L21/H18 | 0.848 | 0.840 | 0.921 | 0.909 | 0.974 | 0.971 |
+
+For these rows, RoPE does not erase the low-to-mid-dimensional readout. The
+largest post-RoPE reductions in the table are still small relative to the
+absolute probe accuracy.
+
 ## What This Does Not Prove
 
 This is still descriptive geometry. It does not prove that the audited heads
@@ -138,8 +184,6 @@ cosine silhouette is modest.
 
 ## Next Checks
 
-- Run the same audit on post-RoPE rows for the matched TREC and CodeXGLUE
-  readouts.
 - Add a class-balanced TREC audit excluding `ABBR`.
 - Compare Q-space with K-space and V-space to see whether the residual linear
   code is Q-specific.

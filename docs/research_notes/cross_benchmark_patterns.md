@@ -216,8 +216,7 @@ variable is readable, not yet which head causes downstream behavior.
 
 ## Next Checks
 
-- Extend the silhouette-vs-probe geometry audit to matched post-RoPE rows and
-  the ABBR-excluded TREC check.
+- Extend the silhouette-vs-probe geometry audit to the ABBR-excluded TREC check.
 - Run dense checkpoints for the same CodeXGLUE matrix.
 - Relax the CodeXGLUE `--max-token-length 64` cap on a larger machine.
 - Add K-space and V-space scans to separate Q-specific routing from generic
