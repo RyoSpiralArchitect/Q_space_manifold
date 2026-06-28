@@ -591,7 +591,13 @@ def activation_capture_stage(stage: str, activation_space: str = "q") -> str:
     if stage == Q_STAGE_PRE_ROPE:
         return "projection_output_pre_attention_position_rotation"
     if stage == Q_STAGE_POST_ROPE:
-        return "query_after_attention_position_rotation_pre_score"
+        if space == "q":
+            return "query_after_attention_position_rotation_pre_score"
+        if space == "k":
+            return "key_after_attention_position_rotation_pre_score"
+        if space == "v":
+            return "value_projection_output_no_rotary_position_rotation"
+        return f"{space}_activation_capture_stage:{stage}"
     return f"{space}_activation_capture_stage:{stage}"
 
 
@@ -628,6 +634,18 @@ def q_capture_position_note(
             f"{activation_space}_projection output, before rotary position embedding is applied inside attention."
         )
     if stage == Q_STAGE_POST_ROPE:
+        if activation_space == "k":
+            return (
+                "For RoPE models this is the key tensor captured from the model's actual "
+                "RoPE call after rotary position embedding, before attention scaling/scoring. "
+                "The current implementation supports MLX full-sequence capture with cache offset 0."
+            )
+        if activation_space == "v":
+            return (
+                "For RoPE attention, value vectors are not rotary-position-rotated. "
+                "When --q-capture-stage post-rope is requested for V-space, this run captures "
+                "the V projection output and labels it as no-rotary V for matched Q/K/V reporting."
+            )
         return (
             "For RoPE models this is the query tensor captured from the model's actual "
             "RoPE call after rotary position embedding, before attention scaling/scoring. "
@@ -1112,18 +1130,27 @@ class MlxResidualInputCaptureWrapper:
         return getattr(self._inner, name)
 
 
-class MlxRopeQCaptureWrapper:
-    def __init__(self, inner: Any, layer_idx: int, cache: dict[int, Any], expected_heads: int) -> None:
+class MlxRopeActivationCaptureWrapper:
+    def __init__(self, inner: Any, layer_idx: int, cache: dict[int, Any], activation_space: str) -> None:
         self._inner = inner
         self._layer_idx = layer_idx
         self._cache = cache
-        self._expected_heads = expected_heads
+        self._activation_space = normalize_activation_space(activation_space)
+        self._target_rope_call_index = 1 if self._activation_space == "k" else 0
+        self._last_forward_id: Any = None
+        self._rope_call_index = 0
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         output = self._inner(*args, **kwargs)
+        forward_id = self._cache.get(-1)
+        if forward_id != self._last_forward_id:
+            self._last_forward_id = forward_id
+            self._rope_call_index = 0
         shape = getattr(output, "shape", ())
-        if self._layer_idx not in self._cache and len(shape) == 4 and int(shape[1]) == self._expected_heads:
-            self._cache[self._layer_idx] = output
+        if len(shape) == 4:
+            if self._layer_idx not in self._cache and self._rope_call_index == self._target_rope_call_index:
+                self._cache[self._layer_idx] = output
+            self._rope_call_index += 1
         return output
 
     def __getattr__(self, name: str) -> Any:
@@ -1196,10 +1223,10 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
         raise SystemExit("mlx backend requires: pip install mlx mlx-lm") from exc
     activation_space = normalize_activation_space(args.activation_space)
     q_capture_stage = normalize_q_capture_stage(args.q_capture_stage)
-    if q_capture_stage == Q_STAGE_POST_ROPE and activation_space != "q":
+    if q_capture_stage == Q_STAGE_POST_ROPE and activation_space == "resid_pre":
         raise SystemExit(
-            "--q-capture-stage post-rope currently captures RoPE-applied Q only. "
-            "Use --q-capture-stage pre-rope with --activation-space k/v/resid_pre for companion comparisons."
+            "--q-capture-stage post-rope is not meaningful for --activation-space resid_pre. "
+            "Use --q-capture-stage pre-rope for the projection-input baseline."
         )
 
     load_kwargs: dict[str, Any] = {}
@@ -1218,14 +1245,14 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
     rope_path = ""
     for layer_idx, layer in enumerate(layers):
         parent, attr, projection_path = find_mlx_projection(layer, activation_space)
-        if q_capture_stage == Q_STAGE_POST_ROPE:
+        if q_capture_stage == Q_STAGE_POST_ROPE and activation_space in {"q", "k"}:
             rope_parent, rope_attr, rope_path = find_mlx_rope(layer)
             original = getattr(rope_parent, rope_attr)
             originals.append((rope_parent, rope_attr, original))
             setattr(
                 rope_parent,
                 rope_attr,
-                MlxRopeQCaptureWrapper(original, layer_idx, current_q_cache, num_heads),
+                MlxRopeActivationCaptureWrapper(original, layer_idx, current_q_cache, activation_space),
             )
         else:
             original = getattr(parent, attr)
@@ -1240,8 +1267,9 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
     token_records: list[list[str]] = []
 
     try:
-        for text in progress(dataset.texts, f"extracting MLX {activation_space_label(activation_space)}/tokens"):
+        for sample_idx, text in enumerate(progress(dataset.texts, f"extracting MLX {activation_space_label(activation_space)}/tokens")):
             current_q_cache.clear()
+            current_q_cache[-1] = sample_idx
             ids = truncate_token_ids(encode_mlx(tokenizer, text), args)
             tokens = mlx_tokens(tokenizer, ids)
             inputs = mx.array([ids])
@@ -1261,11 +1289,11 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
                             "does not match [batch, seq, hidden]"
                         )
                     q_np = np.array(q_raw[:, None, :, :]).astype("float32")[0]
-                elif q_capture_stage == Q_STAGE_POST_ROPE:
-                    if len(q_raw.shape) != 4 or q_raw.shape[1] != num_heads or q_raw.shape[-1] != head_dim:
+                elif q_capture_stage == Q_STAGE_POST_ROPE and activation_space in {"q", "k"}:
+                    if len(q_raw.shape) != 4 or q_raw.shape[-1] != head_dim:
                         raise RuntimeError(
-                            f"MLX layer {layer_idx} post-RoPE Q shape {q_raw.shape} does not match "
-                            f"[batch, heads={num_heads}, seq, head_dim={head_dim}]"
+                            f"MLX layer {layer_idx} post-RoPE {activation_space_label(activation_space)} "
+                            f"shape {q_raw.shape} does not match [batch, heads, seq, head_dim={head_dim}]"
                         )
                     q_np = np.array(q_raw).astype("float32")[0]
                 else:
@@ -1599,7 +1627,11 @@ def q_capture_label(args: argparse.Namespace) -> str:
             return "pre-projection residual/input baseline"
         return f"pre-RoPE {activation_label} projection output"
     if stage == Q_STAGE_POST_ROPE:
-        return "post-RoPE Q, pre-score"
+        if activation_space in {"q", "k"}:
+            return f"post-RoPE {activation_label}, pre-score"
+        if activation_space == "v":
+            return "V projection output; no rotary position rotation"
+        return f"post-RoPE {activation_label}"
     return str(stage or f"{activation_label} projection output")
 
 
@@ -3858,7 +3890,7 @@ def parse_args() -> argparse.Namespace:
         default="q",
         help=(
             "Which attention space to analyze: q/query, k/key, v/value, or resid_pre/residual "
-            "for the projection-input baseline. K/V and resid_pre capture use pre-RoPE/pre-projection outputs."
+            "for the projection-input baseline. V is not rotary-position-rotated; resid_pre uses pre-projection input."
         ),
     )
     parser.add_argument(
@@ -3866,8 +3898,8 @@ def parse_args() -> argparse.Namespace:
         default="pre-rope",
         help=(
             "Which capture stage to analyze. Use pre-rope for projection outputs, or "
-            "post-rope for RoPE-applied Q before attention scoring. post-rope currently requires "
-            "--backend mlx and --activation-space q."
+            "post-rope for RoPE-applied Q/K before attention scoring. post-rope currently requires "
+            "--backend mlx; V post-rope records no-rotary V projection output."
         ),
     )
     parser.add_argument(
@@ -4065,8 +4097,8 @@ def parse_args() -> argparse.Namespace:
         args.activation_space = normalize_activation_space(args.activation_space)
     except SystemExit as exc:
         parser.error(str(exc))
-    if args.q_capture_stage == Q_STAGE_POST_ROPE and args.activation_space != "q":
-        parser.error("--q-capture-stage post-rope currently supports --activation-space q only")
+    if args.q_capture_stage == Q_STAGE_POST_ROPE and args.activation_space == "resid_pre":
+        parser.error("--q-capture-stage post-rope is not meaningful for --activation-space resid_pre")
     if args.pool_last_k_sweep:
         try:
             parse_positive_int_list(args.pool_last_k_sweep)

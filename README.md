@@ -139,6 +139,8 @@ Interpretation:
 ```text
 pre-RoPE Q  = content / stance routing vector
 post-RoPE Q = content + positional phase query used for attention scoring
+post-RoPE K = content + positional phase key used for attention scoring
+V-space     = value projection output; RoPE does not rotate V
 ```
 
 To capture RoPE-applied Q vectors instead, use:
@@ -147,13 +149,16 @@ To capture RoPE-applied Q vectors instead, use:
 --q-capture-stage post-rope
 ```
 
-The current post-RoPE implementation supports MLX RoPE models and captures the
-query tensor from the model's actual RoPE call before attention scaling/scoring.
-This makes pre/post comparison an explicit experimental axis:
+The current post-RoPE implementation supports MLX RoPE models and captures Q/K
+tensors from the model's actual RoPE call before attention scaling/scoring.
+V-space is accepted with `--q-capture-stage post-rope` for matched reporting,
+but value vectors are not rotary-position-rotated, so the captured tensor is the
+no-rotary V projection output.
 
 ```text
 pre-RoPE  = stance routing before positional rotation
-post-RoPE = stance routing after positional phase is applied
+post-RoPE Q/K = stance/address tensors after positional phase is applied
+post-RoPE V   = no-rotary V projection output, labelled explicitly
 ```
 
 The same capture pipeline can also inspect pre-attention K-space and V-space:
@@ -164,10 +169,8 @@ The same capture pipeline can also inspect pre-attention K-space and V-space:
 --activation-space v  # value projection space
 ```
 
-For RoPE models, K/V comparison currently uses `--q-capture-stage pre-rope`.
-Post-RoPE capture remains Q-only because the current hook records RoPE-applied
-queries from the model's rotary call. This keeps Q pre/post-RoPE comparisons
-separate from Q/K/V projection-space comparisons.
+For RoPE models, K-space can now be compared pre/post-RoPE. V-space remains a
+projection-space comparison because RoPE attention rotates Q/K but not V.
 
 ## Representative Run
 
