@@ -571,6 +571,17 @@ def activation_space_label(space: str) -> str:
     return ACTIVATION_SPACE_LABELS.get(normalize_activation_space(space), str(space).upper())
 
 
+def activation_capture_stage(stage: str, activation_space: str = "q") -> str:
+    """Space-neutral capture-stage label for Q/K/V projection artifacts."""
+    stage = normalize_q_capture_stage(stage)
+    space = normalize_activation_space(activation_space)
+    if stage == Q_STAGE_PRE_ROPE:
+        return "projection_output_pre_attention_position_rotation"
+    if stage == Q_STAGE_POST_ROPE:
+        return "query_after_attention_position_rotation_pre_score"
+    return f"{space}_activation_capture_stage:{stage}"
+
+
 def q_capture_position_note(
     stage: str,
     *,
@@ -940,6 +951,7 @@ def collect_with_torch(args: argparse.Namespace, dataset: TextDataset) -> Captur
             "activation_space": activation_space,
             "activation_space_label": activation_space_label(activation_space),
             "q_capture_stage": q_capture_stage,
+            "activation_capture_stage": activation_capture_stage(q_capture_stage, activation_space),
             "q_capture_position_note": q_capture_position_note(
                 q_capture_stage,
                 backend="torch",
@@ -1237,6 +1249,7 @@ def collect_with_mlx(args: argparse.Namespace, dataset: TextDataset) -> CaptureB
             "activation_space_label": activation_space_label(activation_space),
             "rope_path": rope_path if q_capture_stage == Q_STAGE_POST_ROPE else "",
             "q_capture_stage": q_capture_stage,
+            "activation_capture_stage": activation_capture_stage(q_capture_stage, activation_space),
             "q_capture_position_note": q_capture_position_note(
                 q_capture_stage,
                 backend="mlx",
@@ -3411,6 +3424,7 @@ def analyze_bundle(args: argparse.Namespace, dataset: TextDataset, bundle: Captu
         "activation_space": args.activation_space,
         "activation_space_label": activation_space_label(args.activation_space),
         "q_capture_stage": args.q_capture_stage,
+        "activation_capture_stage": activation_capture_stage(args.q_capture_stage, args.activation_space),
         "q_capture_label": q_capture_label(args),
         "q_capture_position_note": args.q_capture_position_note,
         "best_head_at_target_layer": best_head,
@@ -3495,6 +3509,7 @@ def batch_summary_row(summary: dict[str, Any]) -> dict[str, Any]:
         "activation_space": summary.get("activation_space", "q"),
         "activation_space_label": summary.get("activation_space_label", ""),
         "q_capture_stage": summary.get("q_capture_stage", ""),
+        "activation_capture_stage": summary.get("activation_capture_stage", ""),
         "q_capture_label": summary.get("q_capture_label", ""),
         "target_layer": summary.get("target_layer", ""),
         "target_layer_relative_depth": summary.get("target_layer_relative_depth", ""),
@@ -3522,6 +3537,7 @@ def batch_top_layer_head_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
             "dataset_source": (summary.get("dataset") or {}).get("dataset_source", ""),
             "activation_space": summary.get("activation_space", "q"),
             "q_capture_stage": summary.get("q_capture_stage", ""),
+            "activation_capture_stage": summary.get("activation_capture_stage", ""),
             "rank": rank,
             "layer": row.get("layer", ""),
             "head": row.get("head", ""),

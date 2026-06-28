@@ -141,7 +141,7 @@ cosine silhouette is modest.
 - Run the same audit on post-RoPE rows for the matched TREC and CodeXGLUE
   readouts.
 - Add a class-balanced TREC audit excluding `ABBR`.
-- Run matched `--activation-space q/k/v` captures to see whether the residual
-  linear code is Q-specific.
+- Apply the geometry audit to the CodeXGLUE n300 Q/K/V rows, especially the
+  strong V-space L19/H7 and L19/H2 readouts.
 - Use causal ablation after the geometry is stable across seeds and capture
   stage.

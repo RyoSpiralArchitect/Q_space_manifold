@@ -16,6 +16,7 @@ Compact tracked artifacts:
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/post_rope_pool_last_k_sweep_summary.csv`
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_pool_last_k_comparison.csv`
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_best_per_model_comparison.csv`
+- `examples/codexglue_qkv_activation_space_n300/qkv_best_layer_heads.csv`
 - `examples/codexglue_code_language_n1000_mistral_it_pre_rope/pool_last_k_sweep_summary.csv`
 - `examples/codexglue_code_language_n1000_mistral_it_post_rope/pool_last_k_sweep_summary.csv`
 
@@ -25,6 +26,7 @@ Large full outputs, including `q_space_vectors.npz`, remain outside the repo:
 - `~/q_space_runs/codexglue_code_language_n1000_6models_post_rope_len64_capped`
 - `~/q_space_runs/codexglue_code_language_n1000_mistral_it_pre_rope_len64_capped_sweep`
 - `~/q_space_runs/codexglue_code_language_n1000_mistral_it_post_rope_len64_capped_sweep`
+- `~/q_space_runs/codexglue_code_language_n300_6models_qkv_pre_rope_pool5_len64/{q,k,v}`
 
 ## Settings
 
@@ -101,6 +103,28 @@ code-language row, while the instruction-tuned model has a weaker final-layer
 surface. Even there, the best-head linear probe remains high, so the cautious
 phrasing is weak single-head clustering, not absence of code-language
 information.
+
+## Follow-up: Q/K/V Activation-Space Check
+
+A later n300/class pre-RoPE follow-up compared Q, K, and V projection spaces at
+`pool_last_k=5`. See
+`docs/research_notes/codexglue_qkv_activation_space_n300.md` for the full note.
+
+The main result is that the capped CodeXGLUE readout is not Q-only. Q-space keeps
+the late language readout reported above, but V-space shows much cleaner raw
+cosine separation:
+
+| model family | Q-space headline | V-space headline |
+| --- | ---: | ---: |
+| Mistral base/IT | L21/H18, sil `0.1018/0.0938` | L19/H7, sil `0.4261/0.3930` |
+| Llama 3 base/IT | L19/H30, sil `0.2031/0.1791` | L19/H7, sil `0.5605/0.5456` |
+| Gemma 2 2B base/IT | L19/H4, sil `0.0980/0.0489` | L19/H2, sil `0.2557/0.1319` |
+
+This changes the code-language reading slightly. The query-side result remains a
+useful late readout, but the strongest manifold separation appears in the value
+projection space. For CodeXGLUE, the working interpretation is now "late
+language-evidence geometry is clearest in V, while Q exposes a weaker query-side
+readout." This is still a geometric observation, not a causal assignment.
 
 ## Mistral-IT Pooling Detail
 

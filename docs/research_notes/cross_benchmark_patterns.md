@@ -28,6 +28,8 @@ The main tracked tables used here are:
 - `examples/trec_coarse_pre_post_rope_n1000ish/pre_post_pool_last_k_comparison.csv`
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_best_per_model_comparison.csv`
 - `examples/codexglue_code_language_6models_pre_post_rope_n1000/pre_post_pool_last_k_comparison.csv`
+- `examples/codexglue_qkv_activation_space_n300/qkv_best_layer_heads.csv`
+- `examples/natural_tasks_qkv_activation_space_n300/qkv_best_layer_heads.csv`
 - `examples/geometry_audit_silhouette_vs_probe/geometry_audit_summary.csv`
 
 ## Benchmark Matrix
@@ -138,6 +140,29 @@ band and can understate prompted SST-2 or TREC rows depending on pooling.
 Claim-facing tables should continue to come from the full layer x head
 silhouette scan, with target-layer plots treated as diagnostics.
 
+### 6. Activation space can change the visible geometry
+
+The matched Q/K/V passes now cover CodeXGLUE and a first n300 pass over SUBJ,
+prompted SST-2, and TREC. The result is no longer compatible with a Q-only
+framing. CodeXGLUE remains the strongest V-space case: at n300/class and
+`pool_last_k=5`, Mistral/Llama recur at V L19/H7 and Gemma 2 2B at V L19/H2.
+
+The natural-language pass is more task-dependent. SUBJ often becomes clearer in
+K/V than Q, especially around the Mistral `L16/H6` mid-layer row. Prompted SST-2
+shows very strong V-space rows for Mistral-IT and Llama3-IT. TREC keeps more
+modest answer-type geometry across Q, K, and V rather than collapsing to a
+single projection space.
+
+The cautious update is that Q-space is a posture probe, but K/V can expose
+addressable structure and accumulated evidence geometry. The exact division is
+still task-conditioned and single-seed.
+
+The compact Q/K/V artifacts now include GQA-aware `q_to_kv_group` columns. This
+prevents raw Q head IDs from being compared directly to K/V head IDs. It also
+exposes a few sharper relationships: TREC Mistral maps `Q H26 -> KV group 6`,
+matching the best K head `H6`, while CodeXGLUE Llama maps `Q H30 -> KV group 7`
+and matches both K and V `H7`.
+
 ## Fine Differences
 
 ### SUBJ: stance separation
@@ -146,6 +171,12 @@ SUBJ is the cleanest stance-style benchmark so far. Mistral stays relatively
 stable around early/mid bands. Llama 3 instruction tuning moves the strongest
 readout later. Gemma 2 2B base has a late readable axis, while Gemma 2 2B-it is
 weak and rank-unstable.
+
+The n300 Q/K/V follow-up adds an important nuance: SUBJ is not Q-only. K/V rows
+are often stronger than the matched Q rows, with Mistral base and instruct both
+landing at `K/V L16/H6`. This makes SUBJ look less like a pure query-posture
+probe and more like a mid-layer stance geometry that is visible across attention
+projection spaces.
 
 This makes SUBJ useful as the first "stance formation" probe, but it should not
 be used as the template for every task.
@@ -158,6 +189,11 @@ Llama3-IT show strong sentiment-query rows when the input ends with an explicit
 tuning may be improving prompt-following and cue use, not only abstract
 sentiment representation.
 
+The n300 Q/K/V pass makes the cue/readout caveat sharper. In the instruction-
+tuned Mistral and Llama rows, V-space is stronger than Q-space or K-space. Under
+this prompt template, sentiment polarity may be most compact in value/readout
+geometry rather than in the query posture alone.
+
 ### TREC: answer-type routing
 
 TREC is weaker by raw silhouette than SUBJ, but it is stable and linearly
@@ -167,7 +203,13 @@ pre/post-RoPE headline rows stay fixed.
 The main caveat is dataset imbalance: `ABBR` contributes only 86 rows in the
 tracked `n1000ish` run. The ABBR-excluded check did not erase the headline
 readouts, but absolute six-class silhouette comparisons should still be read
-with that imbalance in mind.
+with that imbalance in mind. The n300 Q/K/V reconnaissance has the same class-
+availability issue and realizes `1586` rows rather than a balanced `1800`.
+
+In that n300 pass, TREC does not look Q-exclusive. Mistral keeps a modest Q/K/V
+sequence from `Q L17/H26` to `K L19/H6` to `V L21/H7`, while Llama and Gemma
+base have their strongest TREC row in V-space. The safer reading is distributed
+answer-type geometry across projection spaces.
 
 ### CodeXGLUE: late code-language routing
 
@@ -197,18 +239,26 @@ it looks more like a late pooled-tail routing/readout after syntax and lexical
 evidence has accumulated.
 ```
 
+The Q/K/V follow-up sharpens the activation-space part of this reading. The late
+readout remains visible in Q-space, but the raw cosine manifold is much cleaner
+in V-space. Under the capped CodeXGLUE condition, code-language identity looks
+less like a pure query-posture phenomenon and more like a late evidence geometry
+that Q can query and V carries strongly.
+
 ## Working Hypothesis
 
 A compact hypothesis that fits the current benchmark set is:
 
 ```text
 Q-space task readouts appear where the model has enough context to form the
-next attention query for that task.
+next attention query for that task. K/V spaces can expose complementary address
+and evidence geometry once the relevant task variable is available.
 
 Stance and prompt-cue tasks can appear in early/mid or cue-local bands.
-Answer-type questions often sharpen at the final question stance.
-Code-language identity appears later and strengthens when the tail context is
-pooled.
+Answer-type questions often sharpen at the final question stance but can remain
+visible across Q/K/V. Code-language identity appears later, strengthens when the
+tail context is pooled, and becomes especially clean in V-space under the capped
+CodeXGLUE condition.
 ```
 
 This is intentionally weaker than a mechanistic claim. It says where the
@@ -220,8 +270,9 @@ variable is readable, not yet which head causes downstream behavior.
   the ABBR-excluded TREC check.
 - Run dense checkpoints for the same CodeXGLUE matrix.
 - Relax the CodeXGLUE `--max-token-length 64` cap on a larger machine.
-- Run matched `--activation-space q/k/v` scans to separate Q-specific routing
-  from generic attention-projection separability.
+- Extend the current CodeXGLUE and natural-task n300 `--activation-space q/k/v`
+  scans to larger n, pooling sweeps, relaxed token caps where relevant, and
+  post-RoPE-compatible variants where the implementation supports them.
 - Add causal ablation for recurring heads or bands, especially Mistral L21/H18
   and Llama L19/H30 on CodeXGLUE.
 - Repeat key matrices across dataset seeds before interpreting small

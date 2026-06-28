@@ -74,6 +74,15 @@ supported for MLX RoPE models; causal ablation remains a planned follow-up.
   Mistral recurs at L21/H18, Llama 3 at L19/H30, and Gemma 2 2B remains weaker
   and more diffuse. The readout is largely stable across pre/post-RoPE in
   Mistral and Llama 3.
+- [CodeXGLUE Q/K/V activation-space sweep](docs/research_notes/codexglue_qkv_activation_space_n300.md):
+  a matched n300/class pre-RoPE comparison across Q, K, and V projection spaces.
+  The late code-language signal is readable in Q-space, but the cleanest raw
+  cosine separation appears in V-space: Mistral/Llama recur at V L19/H7 and
+  Gemma 2 2B at V L19/H2.
+- [Natural-task Q/K/V activation-space sweep](docs/research_notes/natural_tasks_qkv_activation_space_n300.md):
+  a matched n300 pre-RoPE comparison across SUBJ, prompted SST-2, and TREC.
+  SUBJ often becomes clearer in K/V, prompted SST-2 instruction-tuned rows are
+  strongest in V-space, and TREC keeps modest answer-type geometry across Q/K/V.
 - [Silhouette vs probe geometry audit](docs/research_notes/silhouette_probe_geometry_audit.md):
   a second-pass diagnostic for TREC and CodeXGLUE rows where raw cosine
   silhouette is modest but linear probe accuracy is high. The current reading is
@@ -117,7 +126,10 @@ pre-RoPE Q projection output
 That is intentional for the current probe: it emphasizes the content-dependent
 query direction before rotary positional phase is applied. Metadata and plot
 titles now record this as `q_capture_stage:
-q_projection_output_pre_attention_position_rotation`.
+q_projection_output_pre_attention_position_rotation`; newer summaries also
+record the space-neutral `activation_capture_stage:
+projection_output_pre_attention_position_rotation`, which is easier to read for
+matched Q/K/V runs.
 
 Interpretation:
 
@@ -565,7 +577,7 @@ token_flow_meta_layer_L_head_H.csv
 For `--activation-space k` or `--activation-space v`, the vector bundle keeps
 the legacy `q_space_vectors.npz` filename for compatibility, but
 `run_metadata.json`, `analysis_summary.json`, and batch CSVs record
-`activation_space` and `activation_space_label`.
+`activation_space`, `activation_space_label`, and `activation_capture_stage`.
 
 Optional outputs:
 
@@ -605,9 +617,9 @@ distributed linear readout.
   the ABBR-excluded TREC check;
 - compare pre-RoPE and post-RoPE Q capture on the strongest 4bit heads before
   treating the dense run as a final architecture check;
-- run matched `--activation-space q/k/v` scans to determine whether weak Gemma
-  localization and the common-mode residual geometry are Q-specific or
-  representation-wide;
+- extend matched `--activation-space q/k/v` scans beyond the current CodeXGLUE
+  and natural-task n300 pre-RoPE passes, especially to larger n, pooling sweeps,
+  relaxed token caps, and geometry audits of K/V rows;
 - add a two-class silhouette ceiling sanity check so SUBJ scores can be
   interpreted against an empirical upper bound;
 - test whether Gemma's weaker single-head signal becomes stronger in 9B or
