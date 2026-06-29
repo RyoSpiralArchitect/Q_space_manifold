@@ -17,7 +17,7 @@ run_sweep() {
     --q-capture-stage "$stage"
     --pool-last-k-sweep 1,3,5
     --target-layer-fraction 0.35
-    --target-head 4
+    --target-head 0
     --projection pca
     --detail-best-layer-head
     --label-permutation-n 200
